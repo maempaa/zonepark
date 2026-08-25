@@ -1,68 +1,76 @@
 ---
 import Base from '../layouts/Base.astro';
-import PruebaConexion from '../components/PruebaConexion';
 import { apiGet } from '../lib/api';
+import { leerSesion } from '../lib/session';
 
-// Render en el servidor: Astro habla con FastAPI por la red interna.
-const salud = await apiGet<{ status: string; env: string; database: string }>('/health');
-const meta = await apiGet<{ app: string; version: string; tenant_mode: string }>('/api/v1/meta');
+// Con sesión abierta se va directo al parqueadero.
+const sesion = leerSesion(Astro.cookies);
+if (sesion) {
+  return Astro.redirect(`/t/${sesion.tenant}`);
+}
 
-const filas = [
-  { nombre: 'Astro (SSR)', ok: true, detalle: 'renderizando esta página' },
-  {
-    nombre: 'FastAPI',
-    ok: salud.ok,
-    detalle: salud.ok ? `entorno ${salud.data.env}` : salud.error,
-  },
-  {
-    nombre: 'PostgreSQL',
-    ok: salud.ok && salud.data.database === 'ok',
-    detalle: salud.ok ? salud.data.database : 'sin verificar',
-  },
-];
+const meta = await apiGet<{ default_currency: string }>('/api/v1/meta');
+const enDesarrollo = import.meta.env.DEV;
 ---
-<Base titulo="Estado del sistema">
-  <header class="px-5 pt-8 pb-6">
-    <h1 class="text-2xl font-bold tracking-tight">ZonePark</h1>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-      Fase 0 · andamiaje verificado ✓
-      {meta.ok && <span> · v{meta.data.version}</span>}
-    </p>
-  </header>
-
-  <main class="flex-1 space-y-6 px-5 pb-10">
-    <section class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
-      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-        {filas.map((f) => (
-          <li class="flex items-center justify-between gap-3 px-4 py-4">
-            <div class="min-w-0">
-              <p class="font-medium">{f.nombre}</p>
-              <p class="truncate text-sm text-slate-500 dark:text-slate-400">{f.detalle}</p>
-            </div>
-            <span
-              class:list={[
-                'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
-                f.ok
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                  : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-              ]}
-            >
-              {f.ok ? 'OK' : 'FALLA'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-
-    <section class="space-y-3">
-      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Desde el navegador
-      </h2>
-      <PruebaConexion client:load />
-      <p class="text-xs text-slate-500 dark:text-slate-400">
-        Este botón sale del navegador, pasa por el proxy de Astro y llega a FastAPI.
-        Comprueba la cadena que usará el operario.
+<Base titulo="Entrar">
+  <main class="flex flex-1 flex-col justify-center px-6 py-10">
+    <header class="mb-8 text-center">
+      <p class="text-sm font-medium uppercase tracking-widest text-brand-600">ZonePark</p>
+      <h1 class="mt-2 text-2xl font-bold">Administración de parqueaderos</h1>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        Escribe el identificador de tu parqueadero
       </p>
-    </section>
+    </header>
+
+    <form method="GET" id="ir" class="space-y-4">
+      <input
+        type="text"
+        name="p"
+        required
+        autocapitalize="none"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder="por ejemplo: central"
+        class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-lg
+               text-slate-900 outline-none focus:border-brand-500 focus:ring-2
+               focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900
+               dark:text-slate-100"
+      />
+      <button
+        type="submit"
+        class="w-full rounded-xl bg-brand-600 px-4 py-4 text-lg font-semibold text-white
+               transition active:bg-brand-700"
+      >
+        Continuar
+      </button>
+    </form>
+
+    {enDesarrollo && (
+      <div class="mt-10 space-y-2 text-center">
+        <p class="text-xs uppercase tracking-wide text-slate-400">Parqueaderos de prueba</p>
+        <div class="flex justify-center gap-3">
+          <a class="text-sm font-medium text-brand-600 hover:underline" href="/t/central/login">
+            central
+          </a>
+          <a class="text-sm font-medium text-brand-600 hover:underline" href="/t/norte/login">
+            norte
+          </a>
+        </div>
+        <p class="pt-4 text-xs text-slate-400">
+          <a class="hover:underline" href="/estado">Estado del sistema</a>
+          {meta.ok && <span> · moneda {meta.data.default_currency}</span>}
+        </p>
+      </div>
+    )}
   </main>
+
+  <script>
+    // Sin JS el formulario haría GET a /?p=…; con JS va a la ruta del tenant.
+    document.getElementById('ir')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const campo = (e.target as HTMLFormElement).elements.namedItem('p') as HTMLInputElement;
+      const slug = campo.value.trim().toLowerCase();
+      if (slug) window.location.href = `/t/${encodeURIComponent(slug)}/login`;
+    });
+  </script>
 </Base>

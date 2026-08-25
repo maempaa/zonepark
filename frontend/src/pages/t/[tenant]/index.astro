@@ -1,0 +1,84 @@
+---
+import Base from '../../../layouts/Base.astro';
+import CerrarSesion from '../../../components/CerrarSesion';
+import { llamarApi } from '../../../lib/api';
+
+const { tenant } = Astro.params;
+
+interface Perfil {
+  nombre: string;
+  email: string;
+  tenant_nombre: string;
+  roles: string[];
+  permisos: string[];
+  sedes: string[] | null;
+}
+interface Sede {
+  id: string;
+  codigo: string;
+  nombre: string;
+  direccion: string | null;
+  device_policy: string;
+}
+
+const respuestaPerfil = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!respuestaPerfil || !respuestaPerfil.ok) {
+  return Astro.redirect(`/t/${tenant}/login`);
+}
+const perfil: Perfil = await respuestaPerfil.json();
+
+const respuestaSedes = await llamarApi(Astro.cookies, tenant!, '/sedes');
+const sedes: Sede[] = respuestaSedes?.ok ? await respuestaSedes.json() : [];
+
+const puedeCobrar = perfil.permisos.includes('ticket:checkout');
+---
+<Base titulo={perfil.tenant_nombre}>
+  <header class="flex items-start justify-between gap-3 px-5 pt-8 pb-6">
+    <div class="min-w-0">
+      <h1 class="truncate text-xl font-bold">{perfil.tenant_nombre}</h1>
+      <p class="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
+        {perfil.nombre} · {perfil.roles.join(', ')}
+      </p>
+    </div>
+    <CerrarSesion tenant={tenant!} client:load />
+  </header>
+
+  <main class="flex-1 space-y-6 px-5 pb-10">
+    <section class="space-y-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        {perfil.sedes === null ? 'Todas las sedes' : 'Tus sedes'}
+      </h2>
+      <ul class="space-y-2">
+        {sedes.map((sede) => (
+          <li class="rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
+            <div class="flex items-baseline justify-between gap-2">
+              <p class="font-semibold">{sede.nombre}</p>
+              <span class="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium
+                           text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {sede.codigo}
+              </span>
+            </div>
+            {sede.direccion && (
+              <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{sede.direccion}</p>
+            )}
+          </li>
+        ))}
+        {sedes.length === 0 && (
+          <li class="rounded-2xl bg-white p-4 text-sm text-slate-500 shadow-sm
+                     dark:bg-slate-900 dark:text-slate-400">
+            No tienes sedes asignadas todavía.
+          </li>
+        )}
+      </ul>
+    </section>
+
+    <section class="rounded-2xl border border-dashed border-slate-300 p-5 text-center
+                    dark:border-slate-700">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        {puedeCobrar
+          ? 'El registro de ingresos y el cobro llegan en la fase 3.'
+          : 'Tu rol no cobra: verás reportes y configuración cuando estén listos.'}
+      </p>
+    </section>
+  </main>
+</Base>

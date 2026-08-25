@@ -20,10 +20,52 @@ levanta los cuatro servicios y aplica las migraciones.
 | Aplicación web | http://localhost:4321 |
 | API | http://localhost:8010 |
 | Documentación de la API | http://localhost:8010/docs (solo fuera de producción) |
+| Estado del sistema | http://localhost:4321/estado |
 | PostgreSQL | `localhost:55432` |
 
-La página de inicio muestra el estado de la cadena completa: si los tres
-renglones salen en **OK**, el entorno está sano.
+`/estado` muestra la cadena completa: si los tres renglones salen en
+**OK**, el entorno está sano.
+
+## Datos de prueba
+
+```bash
+make seed
+```
+
+Crea dos parqueaderos **a propósito**. Tener siempre un segundo cliente en
+la base hace que una fuga de datos entre tenants se note enseguida, en vez
+de aparecer el día que entra el segundo cliente real.
+
+| Parqueadero | Usuario | Clave | Rol | Alcance |
+|---|---|---|---|---|
+| [central](http://localhost:4321/t/central) | `admin@central.com.co` | `central12345` | Administrador | Todas las sedes |
+| central | `super@central.com.co` | `central12345` | Supervisor | S1 |
+| central | `operario@central.com.co` | `central12345` (PIN `482913`) | Operario | S1 |
+| [norte](http://localhost:4321/t/norte) | `admin@norte.com.co` | `norte12345` | Administrador | Todas las sedes |
+
+## Cómo funciona el aislamiento entre clientes
+
+El tenant viaja en la ruta: `/t/central/...`. La resolución vive aislada en
+[`core/tenancy.py`](backend/app/core/tenancy.py), así que pasar a
+subdominios más adelante es cambiar una función.
+
+El aislamiento no depende de que las consultas recuerden filtrar. Son tres
+capas:
+
+1. `tenant_id` en todas las tablas del cliente.
+2. Políticas **RLS** en Postgres sobre ese campo.
+3. Un rol de base de datos sin privilegios de dueño (`zonepark_app`) que la
+   aplicación adopta con `SET LOCAL ROLE` en cada transacción de tenant. El
+   dueño esquiva RLS; ese rol no.
+
+Si nadie fija `app.tenant_id`, la comparación da NULL y **no se ve ninguna
+fila**: falla cerrado. Las operaciones que ocurren antes de saber el tenant
+(el propio login) usan `system_scope()`, que sí corre como dueño y está
+acotado a unos pocos sitios.
+
+La sesión del navegador vive en cookies `httpOnly` que pone Astro: el
+cliente nunca ve un token, y el proxy renueva el de acceso solo cuando
+caduca.
 
 ## Puertos
 
@@ -75,5 +117,11 @@ para que construir una no sobrescriba la otra.
 
 ## Estado
 
-Fase 0 completa: andamiaje verificado de punta a punta. Sigue la fase 1
-(tenancy, usuarios y roles) según el roadmap del plan.
+- **Fase 0** — andamiaje dockerizado, verificado de punta a punta.
+- **Fase 1** — tenancy con RLS, usuarios, roles, dispositivos y bitácora.
+  36 pruebas contra Postgres real, incluido el criterio de aceptación:
+  un tenant no lee ni un registro de otro ni forzando identificadores.
+
+Sigue la **fase 2**: parametrización (tipos de vehículo, artículos) y el
+motor de tarifas. Es la fase de mayor riesgo del proyecto y por eso se
+construye antes que la operación.

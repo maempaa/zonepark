@@ -1,38 +1,76 @@
 /**
- * BFF: reenvía todo /api/* al backend por la red interna de docker.
+ * BFF: reenvía /api/* al backend por la red interna de docker.
  *
- * Existe para que el navegador nunca hable directo con FastAPI. En la
- * fase 1 este mismo punto lee la cookie httpOnly de sesión y le añade
- * el Authorization al request antes de reenviarlo.
+ * Añade el token de la cookie httpOnly y, si caducó, lo renueva y
+ * reintenta una sola vez. De cara al navegador la sesión simplemente
+ * dura; nunca ve un token ni tiene que refrescar nada.
  */
 import type { APIRoute } from 'astro';
+
+import { renovarSesion } from '../../lib/api';
+import { leerSesion } from '../../lib/session';
 
 export const prerender = false;
 
 const INTERNAL_BASE = process.env.INTERNAL_API_BASE_URL ?? 'http://api:8000';
 
 // Cabeceras que no deben viajar aguas arriba.
-const OMITIR = new Set(['host', 'connection', 'content-length', 'accept-encoding']);
+const OMITIR = new Set([
+  'host',
+  'connection',
+  'content-length',
+  'accept-encoding',
+  'cookie',
+  'authorization',
+]);
 
-const handler: APIRoute = async ({ params, request }) => {
+/** Saca el slug de rutas tipo /api/v1/t/{slug}/... */
+function tenantDeLaRuta(path: string): string | null {
+  const partes = path.split('/');
+  const i = partes.indexOf('t');
+  return i >= 0 && partes[i + 1] ? partes[i + 1] : null;
+}
+
+const handler: APIRoute = async ({ params, request, cookies }) => {
   const url = new URL(request.url);
-  const destino = `${INTERNAL_BASE}/api/${params.path ?? ''}${url.search}`;
+  const path = params.path ?? '';
+  const destino = `${INTERNAL_BASE}/api/${path}${url.search}`;
 
   const headers = new Headers();
   request.headers.forEach((valor, clave) => {
     if (!OMITIR.has(clave.toLowerCase())) headers.set(clave, valor);
   });
 
-  const tieneCuerpo = !['GET', 'HEAD'].includes(request.method);
+  // Solo se adjunta el token si la sesión es de ese mismo parqueadero.
+  const sesion = leerSesion(cookies);
+  const tenant = tenantDeLaRuta(path);
+  const autenticada = sesion && tenant && sesion.tenant === tenant;
+  if (autenticada) headers.set('authorization', `Bearer ${sesion.access}`);
+
+  const cuerpo = ['GET', 'HEAD'].includes(request.method)
+    ? undefined
+    : await request.arrayBuffer();
+
+  const enviar = (h: Headers) =>
+    fetch(destino, {
+      method: request.method,
+      headers: h,
+      body: cuerpo,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15_000),
+    });
 
   try {
-    const res = await fetch(destino, {
-      method: request.method,
-      headers,
-      body: tieneCuerpo ? await request.arrayBuffer() : undefined,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(15000),
-    });
+    let res = await enviar(headers);
+
+    // Token vencido: se rota y se reintenta una vez.
+    if (res.status === 401 && autenticada) {
+      const nuevo = await renovarSesion(cookies, tenant, sesion.refresh);
+      if (nuevo) {
+        headers.set('authorization', `Bearer ${nuevo}`);
+        res = await enviar(headers);
+      }
+    }
 
     const salida = new Headers(res.headers);
     salida.delete('content-encoding');

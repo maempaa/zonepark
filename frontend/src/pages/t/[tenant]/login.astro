@@ -1,0 +1,34 @@
+---
+import Base from '../../../layouts/Base.astro';
+import FormularioIngreso from '../../../components/FormularioIngreso';
+import { apiGet } from '../../../lib/api';
+import { leerSesion } from '../../../lib/session';
+
+const { tenant } = Astro.params;
+
+// Si ya hay sesión de este parqueadero, no tiene sentido pedir el ingreso.
+const sesion = leerSesion(Astro.cookies);
+if (sesion && sesion.tenant === tenant) {
+  return Astro.redirect(`/t/${tenant}`);
+}
+
+// Se consulta la API solo para saber si el parqueadero existe y cómo se llama.
+const meta = await apiGet<{ detail?: string }>(`/api/v1/t/${tenant}/sedes`);
+const existe = meta.ok || meta.status === 401 || meta.status === 403;
+if (!existe && meta.status === 404) {
+  return new Response(null, { status: 404, statusText: 'Parqueadero no encontrado' });
+}
+---
+<Base titulo="Ingreso">
+  <main class="flex flex-1 flex-col justify-center px-6 py-10">
+    <header class="mb-8 text-center">
+      <p class="text-sm font-medium uppercase tracking-widest text-brand-600">ZonePark</p>
+      <h1 class="mt-1 text-2xl font-bold">{tenant}</h1>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        Ingresa para empezar tu turno
+      </p>
+    </header>
+
+    <FormularioIngreso tenant={tenant!} client:load />
+  </main>
+</Base>
