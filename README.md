@@ -4,7 +4,7 @@ Administración multitenant de parqueaderos. Astro (SSR) al frente, FastAPI
 detrás, PostgreSQL y Redis, todo en docker con los puertos parametrizados.
 
 - **Plan completo:** [`docs/PLAN.md`](docs/PLAN.md)
-- **Decisiones cerradas:** [`DECISIONES.md`](DECISIONES.md)
+- **Decisiones cerradas:** [`DECISIONES.md`](docs/DECISIONES.md)
 
 ## Arrancar
 

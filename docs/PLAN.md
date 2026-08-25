@@ -1,5 +1,9 @@
 # ZonePark — Plan de construcción
 
+> **Nota.** Las preguntas abiertas de la §12 ya están resueltas.
+> Lo vigente está en [DECISIONES.md](DECISIONES.md); esta sección se
+> conserva como registro de lo que hubo que decidir.
+
 Sistema multitenant de administración de parqueaderos.
 Frontend **Astro**, backend **FastAPI**, todo dockerizado con puertos parametrizados por `.env`.
 

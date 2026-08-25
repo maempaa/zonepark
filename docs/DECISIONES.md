@@ -1,7 +1,7 @@
 # Decisiones tomadas
 
 Registro de las decisiones de diseño ya cerradas. Reemplazan lo que diga
-`docs/PLAN.md` §12. Si alguna cambia, se anota aquí con la fecha y el motivo.
+[`PLAN.md`](PLAN.md) §12. Si alguna cambia, se anota aquí con la fecha y el motivo.
 
 | # | Decisión | Consecuencia en el código |
 |---|---|---|
