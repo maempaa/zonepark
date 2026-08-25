@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50:  #eef6ff;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+}
+
+/* El operario trabaja de pie, con una mano y a veces bajo el sol. */
+:root {
+  color-scheme: light dark;
+}
+
+html {
+  /* 16px mínimo: por debajo, iOS hace zoom al enfocar un input. */
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* Evita el rebote elástico que confunde en listas largas. */
+  overscroll-behavior-y: none;
+}
+
+/* Nada interactivo por debajo de 48px de alto. */
+button, a[role="button"], input, select {
+  min-height: 48px;
+}

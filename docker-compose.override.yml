@@ -1,0 +1,32 @@
+# Se aplica automáticamente con `docker compose up` (desarrollo).
+# Para producción: docker compose -f docker-compose.yml up -d
+#
+# Ojo: cada target lleva su propia etiqueta de imagen. Sin esto, construir
+# producción sobrescribe la imagen de desarrollo y el contenedor de dev
+# termina corriendo la imagen equivocada.
+services:
+  api:
+    image: zonepark-api:dev
+    build:
+      target: dev
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port $${API_PORT} --reload"
+    volumes:
+      - ./backend:/app
+      - /app/.pytest_cache
+      - /app/.ruff_cache
+    environment:
+      APP_ENV: development
+
+  web:
+    image: zonepark-web:dev
+    build:
+      target: dev
+    command: sh -c "npm run dev -- --host 0.0.0.0 --port $${WEB_PORT}"
+    volumes:
+      - ./frontend:/app
+      # Volúmenes anónimos: lo que genera Astro se queda dentro del
+      # contenedor y no ensucia el árbol del repo con archivos de root.
+      - /app/node_modules
+      - /app/.astro

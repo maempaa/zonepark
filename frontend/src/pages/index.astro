@@ -1,0 +1,68 @@
+---
+import Base from '../layouts/Base.astro';
+import PruebaConexion from '../components/PruebaConexion';
+import { apiGet } from '../lib/api';
+
+// Render en el servidor: Astro habla con FastAPI por la red interna.
+const salud = await apiGet<{ status: string; env: string; database: string }>('/health');
+const meta = await apiGet<{ app: string; version: string; tenant_mode: string }>('/api/v1/meta');
+
+const filas = [
+  { nombre: 'Astro (SSR)', ok: true, detalle: 'renderizando esta página' },
+  {
+    nombre: 'FastAPI',
+    ok: salud.ok,
+    detalle: salud.ok ? `entorno ${salud.data.env}` : salud.error,
+  },
+  {
+    nombre: 'PostgreSQL',
+    ok: salud.ok && salud.data.database === 'ok',
+    detalle: salud.ok ? salud.data.database : 'sin verificar',
+  },
+];
+---
+<Base titulo="Estado del sistema">
+  <header class="px-5 pt-8 pb-6">
+    <h1 class="text-2xl font-bold tracking-tight">ZonePark</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      Fase 0 · andamiaje verificado ✓
+      {meta.ok && <span> · v{meta.data.version}</span>}
+    </p>
+  </header>
+
+  <main class="flex-1 space-y-6 px-5 pb-10">
+    <section class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        {filas.map((f) => (
+          <li class="flex items-center justify-between gap-3 px-4 py-4">
+            <div class="min-w-0">
+              <p class="font-medium">{f.nombre}</p>
+              <p class="truncate text-sm text-slate-500 dark:text-slate-400">{f.detalle}</p>
+            </div>
+            <span
+              class:list={[
+                'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
+                f.ok
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                  : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
+              ]}
+            >
+              {f.ok ? 'OK' : 'FALLA'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="space-y-3">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Desde el navegador
+      </h2>
+      <PruebaConexion client:load />
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        Este botón sale del navegador, pasa por el proxy de Astro y llega a FastAPI.
+        Comprueba la cadena que usará el operario.
+      </p>
+    </section>
+  </main>
+</Base>

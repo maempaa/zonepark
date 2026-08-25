@@ -1,0 +1,20 @@
+# Las dependencias viven en requirements*.txt (las instala el Dockerfile).
+# Este archivo es solo configuración de herramientas.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Depends/Query/Header en argumentos por defecto es el idioma de FastAPI.
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.Query", "fastapi.Path",
+  "fastapi.Header", "fastapi.Body", "fastapi.Form", "fastapi.File",
+]

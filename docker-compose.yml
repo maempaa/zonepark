@@ -1,0 +1,88 @@
+name: zonepark
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: zonepark-api:prod
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV}
+      LOG_LEVEL: ${LOG_LEVEL}
+      API_PORT: ${API_PORT}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET}
+      ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      TENANT_MODE: ${TENANT_MODE}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE}
+      DEFAULT_CURRENCY: ${DEFAULT_CURRENCY}
+      DEFAULT_ROUNDING_STEP: ${DEFAULT_ROUNDING_STEP}
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request;urllib.request.urlopen('http://localhost:'+os.environ['API_PORT']+'/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  web:
+    image: zonepark-web:prod
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        WEB_PORT: ${WEB_PORT}
+    restart: unless-stopped
+    environment:
+      WEB_PORT: ${WEB_PORT}
+      HOST: 0.0.0.0
+      PORT: ${WEB_PORT}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:${API_PORT}}
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://api:${API_PORT}}
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db_data:

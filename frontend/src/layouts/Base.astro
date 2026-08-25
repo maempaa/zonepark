@@ -1,0 +1,22 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  titulo: string;
+}
+const { titulo } = Astro.props;
+---
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: respeta el notch; sin maximum-scale para no romper el zoom accesible -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1d4ed8" />
+    <title>{titulo} · ZonePark</title>
+  </head>
+  <body class="min-h-dvh bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    <div class="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+      <slot />
+    </div>
+  </body>
+</html>
