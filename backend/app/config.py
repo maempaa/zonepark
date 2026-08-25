@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     cors_origins: str = ""
+    max_failed_attempts: int = 5
+    lockout_minutes: int = 15
+    pin_length: int = 6
 
     # Reglas de negocio por defecto (cada tenant puede sobrescribirlas)
     tenant_mode: str = "path"

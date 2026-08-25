@@ -4,16 +4,17 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.config import settings
-from app.db.session import SessionDep
+from app.db.session import system_scope
 
 router = APIRouter(tags=["salud"])
 
 
 @router.get("/health")
-async def health(session: SessionDep) -> dict:
+async def health() -> dict:
     """Liveness + readiness: si la base no responde, el servicio no está listo."""
     try:
-        await session.execute(text("SELECT 1"))
+        async with system_scope() as session:
+            await session.execute(text("SELECT 1"))
         db_ok = True
     except Exception:
         db_ok = False
