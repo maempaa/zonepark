@@ -181,7 +181,9 @@ class Payment(UUIDPk, TenantScoped, Timestamps, Base):
     referencia: Mapped[str | None] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(64))
 
-    # El turno de caja llega en la fase 4.
-    cash_shift_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    # Nulo si se cobró sin turno abierto; los reportes lo señalan.
+    cash_shift_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("cash_shifts.id", ondelete="SET NULL"), index=True
+    )
 
     ticket: Mapped[Ticket] = relationship(back_populates="pagos")

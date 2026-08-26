@@ -77,6 +77,7 @@ class TenantScoped:
 # Importar al final: registra los modelos en Base.metadata para Alembic.
 from app.models import (  # noqa: E402,F401
     audit,
+    caja,
     catalogo,
     device,
     parking_lot,

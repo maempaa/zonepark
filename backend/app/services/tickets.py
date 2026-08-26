@@ -41,6 +41,7 @@ from app.models.ticket import (
     Ticket,
     TicketItem,
 )
+from app.services.caja import turno_abierto_de
 from app.services.tarifas import festivos_entre, plan_vigente, reglas_del_plan
 
 
@@ -329,9 +330,19 @@ async def cerrar_ticket(
             )
         )
 
+    # Se ata el cobro al turno abierto del operario, si lo hay. Cobrar sin
+    # turno no se bloquea —sería dejar al operario tirado a mitad de
+    # jornada— pero el resumen del turno lo señala aparte.
+    turno = None
+    if membership_id is not None:
+        turno = await turno_abierto_de(
+            session, parking_lot_id=ticket.parking_lot_id, membership_id=membership_id
+        )
+
     pago = Payment(
         tenant_id=tenant.id,
         ticket_id=ticket.id,
+        cash_shift_id=turno.id if turno else None,
         metodo=metodo,
         monto=cotizacion.total,
         subtotal=cotizacion.subtotal,
