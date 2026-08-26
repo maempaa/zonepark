@@ -83,6 +83,7 @@ from app.models import (  # noqa: E402,F401
     rbac,
     tarifa,
     tenant,
+    ticket,
     token,
     user,
 )

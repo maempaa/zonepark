@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Boolean, String, UniqueConstraint
+from sqlalchemy import Boolean, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TenantScoped, Timestamps, UUIDPk, enum_column
@@ -40,8 +40,11 @@ class ParkingLot(UUIDPk, TenantScoped, Timestamps, Base):
         default=DevicePolicy.PIN_PERSISTENTE,
     )
 
-    # Prefijo del consecutivo de tickets de esta sede (fase 3).
+    # Prefijo del consecutivo de tickets de esta sede: S1-000042.
     ticket_prefix: Mapped[str] = mapped_column(String(8), nullable=False, default="T")
+    # Último número entregado. Se incrementa con un UPDATE ... RETURNING, que
+    # bloquea la fila: dos ingresos simultáneos no pueden repetir consecutivo.
+    ultimo_consecutivo: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
