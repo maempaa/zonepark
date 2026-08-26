@@ -315,3 +315,65 @@ async def test_turno_abierto_de_solo_encuentra_el_propio(dos_tenants):
         assert await turno_abierto_de(
             session, parking_lot_id=otra_sede.id, membership_id=membresia.id
         ) is None
+
+
+# ── Conteo a ciegas ──────────────────────────────────────────────────────
+# Si el operario viera el esperado antes de contar, teclearía ese número y
+# el arqueo no mediría nada.
+
+async def test_el_operario_no_ve_el_esperado_de_su_turno_abierto(dos_tenants, client):
+    from .conftest import cabecera, entrar
+
+    a, _ = dos_tenants
+    cab = cabecera(await entrar(client, a.slug, a.operario))
+    turno = (await client.post(
+        f"/api/v1/t/{a.slug}/caja/abrir", headers=cab,
+        json={"parking_lot_id": str(a.sede_asignada), "base_inicial": "50000"},
+    )).json()
+
+    assert turno["arqueo"]["conteo_a_ciegas"] is True
+    assert turno["arqueo"]["esperado"] is None
+    assert turno["arqueo"]["efectivo_cobrado"] is None
+    assert turno["turno"]["esperado"] is None
+    # Lo que sí necesita para trabajar sigue estando.
+    assert Decimal(turno["arqueo"]["base_inicial"]) == Decimal("50000.00")
+    assert turno["arqueo"]["tickets_cobrados"] == 0
+
+
+async def test_el_supervisor_si_ve_el_esperado_del_turno_abierto(dos_tenants, client):
+    from .conftest import cabecera, entrar
+
+    a, _ = dos_tenants
+    cab_op = cabecera(await entrar(client, a.slug, a.operario))
+    turno = (await client.post(
+        f"/api/v1/t/{a.slug}/caja/abrir", headers=cab_op,
+        json={"parking_lot_id": str(a.sede_asignada), "base_inicial": "50000"},
+    )).json()["turno"]
+
+    cab_admin = cabecera(await entrar(client, a.slug, a.admin))
+    visto = await client.get(
+        f"/api/v1/t/{a.slug}/caja/turnos/{turno['id']}", headers=cab_admin
+    )
+    assert visto.json()["arqueo"]["conteo_a_ciegas"] is False
+    assert Decimal(visto.json()["arqueo"]["esperado"]) == Decimal("50000.00")
+
+
+async def test_al_cerrar_el_operario_si_ve_la_diferencia(dos_tenants, client):
+    """Ya contó: ocultarlo después no protegería nada y le impediría cuadrar."""
+    from .conftest import cabecera, entrar
+
+    a, _ = dos_tenants
+    cab = cabecera(await entrar(client, a.slug, a.operario))
+    turno = (await client.post(
+        f"/api/v1/t/{a.slug}/caja/abrir", headers=cab,
+        json={"parking_lot_id": str(a.sede_asignada), "base_inicial": "50000"},
+    )).json()["turno"]
+
+    cerrado = await client.post(
+        f"/api/v1/t/{a.slug}/caja/{turno['id']}/cerrar", headers=cab,
+        json={"contado": "49000"},
+    )
+    arqueo = cerrado.json()["arqueo"]
+    assert arqueo["conteo_a_ciegas"] is False
+    assert Decimal(arqueo["esperado"]) == Decimal("50000.00")
+    assert Decimal(arqueo["diferencia"]) == Decimal("-1000.00")

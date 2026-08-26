@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import IdentidadDep, SesionDep, TenantDep, requiere
-from app.models.caja import CashShift
+from app.models.caja import CashShift, EstadoTurno
 from app.models.parking_lot import ParkingLot
 from app.schemas.caja import (
     AperturaIn,
@@ -34,19 +34,27 @@ from app.services.reportes import turnos_del_rango
 router = APIRouter(prefix="/caja", tags=["caja"])
 
 
-def _arqueo_out(a: Arqueo) -> ArqueoOut:
+def _arqueo_out(a: Arqueo, *, a_ciegas: bool = False) -> ArqueoOut:
+    """Convierte el arqueo, ocultando el esperado si el conteo es a ciegas.
+
+    Un operario que viera el esperado antes de contar teclearía ese número
+    y el arqueo no mediría nada. Se le muestra la base y cuántos tickets
+    cobró —lo que necesita para trabajar—, pero no el total que debería
+    haber en el cajón.
+    """
     return ArqueoOut(
         base_inicial=a.base_inicial,
-        efectivo_cobrado=a.efectivo_cobrado,
+        efectivo_cobrado=None if a_ciegas else a.efectivo_cobrado,
         ingresos_manuales=a.ingresos_manuales,
         egresos_manuales=a.egresos_manuales,
-        esperado=a.esperado,
+        esperado=None if a_ciegas else a.esperado,
         contado=a.contado,
-        diferencia=a.diferencia,
+        diferencia=None if a_ciegas else a.diferencia,
         cuadra=a.cuadra,
         tickets_cobrados=a.tickets_cobrados,
-        por_metodo=a.por_metodo,
-        efectivo_sin_turno=a.efectivo_sin_turno,
+        por_metodo={} if a_ciegas else a.por_metodo,
+        efectivo_sin_turno=None if a_ciegas else a.efectivo_sin_turno,
+        conteo_a_ciegas=a_ciegas,
     )
 
 
@@ -62,11 +70,24 @@ def _verificar_alcance(identidad, parking_lot_id: uuid.UUID) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Esa sede no está en tu alcance")
 
 
-async def _detalle(session: AsyncSession, turno: CashShift) -> TurnoDetalleOut:
+def _oculta_el_esperado(identidad, turno: CashShift) -> bool:
+    """Solo se oculta mientras el turno sigue abierto y quien mira lo opera.
+
+    Una vez cerrado ya no hay nada que proteger: el conteo está hecho.
+    """
+    return turno.estado is EstadoTurno.ABIERTO and not identidad.puede("cash:read")
+
+
+async def _detalle(session: AsyncSession, turno: CashShift, identidad) -> TurnoDetalleOut:
     arqueo = await calcular_arqueo(session, turno=turno)
+    salida = TurnoOut.model_validate(turno)
+    a_ciegas = _oculta_el_esperado(identidad, turno)
+    if a_ciegas:
+        salida.esperado = None
+        salida.diferencia = None
     return TurnoDetalleOut(
-        turno=TurnoOut.model_validate(turno),
-        arqueo=_arqueo_out(arqueo),
+        turno=salida,
+        arqueo=_arqueo_out(arqueo, a_ciegas=a_ciegas),
         movimientos=[MovimientoOut.model_validate(m) for m in turno.movimientos],
     )
 
@@ -88,7 +109,7 @@ async def mi_turno(
     turno = await turno_abierto_de(
         session, parking_lot_id=parking_lot_id, membership_id=identidad.membership_id
     )
-    return None if turno is None else await _detalle(session, turno)
+    return None if turno is None else await _detalle(session, turno, identidad)
 
 
 @router.post("/abrir", response_model=TurnoDetalleOut, status_code=status.HTTP_201_CREATED)
@@ -129,7 +150,7 @@ async def abrir(
         tenant_id=tenant.id, actor_user_id=identidad.user_id,
         despues={"base_inicial": str(turno.base_inicial)}, request=request,
     )
-    return await _detalle(session, turno)
+    return await _detalle(session, turno, identidad)
 
 
 @router.post("/{turno_id}/movimientos", response_model=TurnoDetalleOut)
@@ -162,7 +183,7 @@ async def mover(
                  "monto": str(datos.monto)},
         request=request,
     )
-    return await _detalle(session, turno)
+    return await _detalle(session, turno, identidad)
 
 
 @router.post("/{turno_id}/cerrar", response_model=TurnoDetalleOut)
@@ -226,7 +247,7 @@ async def ver_turno(
 ) -> TurnoDetalleOut:
     turno = await _turno_o_404(session, turno_id)
     _verificar_alcance(identidad, turno.parking_lot_id)
-    return await _detalle(session, turno)
+    return await _detalle(session, turno, identidad)
 
 
 @router.get("/descuadres", response_model=list[TurnoOut])

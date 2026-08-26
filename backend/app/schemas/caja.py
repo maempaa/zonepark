@@ -55,17 +55,27 @@ class TurnoOut(BaseModel):
 
 
 class ArqueoOut(BaseModel):
+    """El corte de caja.
+
+    `esperado` y `diferencia` van en nulo mientras el turno esté abierto y
+    quien pregunta sea el propio operario. Si viera el esperado antes de
+    contar, bastaría con teclear ese número: el arqueo dejaría de medir
+    nada. Quien tiene `cash:read` —supervisor o dueño— sí lo ve siempre.
+    """
+
     base_inicial: Decimal
-    efectivo_cobrado: Decimal
+    efectivo_cobrado: Decimal | None
     ingresos_manuales: Decimal
     egresos_manuales: Decimal
-    esperado: Decimal
+    esperado: Decimal | None
     contado: Decimal | None
     diferencia: Decimal | None
     cuadra: bool
     tickets_cobrados: int
     por_metodo: dict[str, Decimal]
-    efectivo_sin_turno: Decimal
+    efectivo_sin_turno: Decimal | None
+    # Le dice al frontend si está viendo el arqueo completo o a ciegas.
+    conteo_a_ciegas: bool = False
 
 
 class TurnoDetalleOut(BaseModel):

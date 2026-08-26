@@ -1,0 +1,193 @@
+---
+import Base from '../../../layouts/Base.astro';
+import TablaConceptos from '../../../components/TablaConceptos.astro';
+import { llamarApi } from '../../../lib/api';
+
+const { tenant } = Astro.params;
+
+const perfilRes = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect(`/t/${tenant}/login`);
+const perfil = await perfilRes.json();
+
+if (!perfil.permisos.includes('report:read')) {
+  return new Response('Tu rol no ve reportes', { status: 403 });
+}
+
+const url = new URL(Astro.request.url);
+const desde = url.searchParams.get('desde') ?? '';
+const hasta = url.searchParams.get('hasta') ?? '';
+const consulta = new URLSearchParams();
+if (desde) consulta.set('desde', desde);
+if (hasta) consulta.set('hasta', hasta);
+const sufijo = consulta.toString() ? `?${consulta}` : '';
+
+const [ocupacionRes, ingresosRes] = await Promise.all([
+  llamarApi(Astro.cookies, tenant!, '/reportes/ocupacion'),
+  llamarApi(Astro.cookies, tenant!, `/reportes/ingresos${sufijo}`),
+]);
+
+const ocupacion = ocupacionRes?.ok ? await ocupacionRes.json() : { total: 0, filas: [] };
+const ingresos = ingresosRes?.ok ? await ingresosRes.json() : null;
+const errorRango = ingresosRes && !ingresosRes.ok ? (await ingresosRes.json()).detail : null;
+
+const puedeVerCaja = perfil.permisos.includes('cash:read');
+const descuadresRes = puedeVerCaja
+  ? await llamarApi(Astro.cookies, tenant!, '/caja/descuadres?limite=5')
+  : null;
+const descuadres = descuadresRes?.ok ? await descuadresRes.json() : [];
+
+const money = (valor: string | number) =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(Number(valor));
+
+// La barra más alta marca la escala del resto.
+const maximo = ingresos?.por_dia?.length
+  ? Math.max(...ingresos.por_dia.map((f: any) => Number(f.total)))
+  : 0;
+---
+<Base titulo="Reportes" ancho>
+  <header class="px-5 pt-8 pb-5">
+    <a href={`/t/${tenant}`} class="text-sm font-medium text-brand-600 dark:text-brand-500">
+      ← Tablero
+    </a>
+    <h1 class="mt-2 text-xl font-bold">Reportes</h1>
+  </header>
+
+  <main class="flex-1 space-y-8 px-5 pb-12">
+    <section class="rounded-2xl bg-white p-5 text-center shadow-sm dark:bg-slate-900">
+      <p class="text-5xl font-bold tabular-nums">{ocupacion.total}</p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        {ocupacion.total === 1 ? 'vehículo adentro ahora' : 'vehículos adentro ahora'}
+      </p>
+      {ocupacion.filas.length > 0 && (
+        <ul class="mt-4 flex flex-wrap justify-center gap-2">
+          {ocupacion.filas.map((f: any) => (
+            <li class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm dark:bg-slate-800">
+              {f.tipo}: <strong class="tabular-nums">{f.adentro}</strong>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    <section class="space-y-4">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Ingresos</h2>
+        <form method="GET" class="flex flex-wrap items-end gap-2">
+          <label class="text-xs text-slate-500">
+            Desde
+            <input
+              type="date" name="desde" value={desde}
+              class="mt-0.5 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm
+                     dark:border-slate-700 dark:bg-slate-900"
+            />
+          </label>
+          <label class="text-xs text-slate-500">
+            Hasta
+            <input
+              type="date" name="hasta" value={hasta}
+              class="mt-0.5 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm
+                     dark:border-slate-700 dark:bg-slate-900"
+            />
+          </label>
+          <button
+            type="submit"
+            class="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white"
+          >
+            Ver
+          </button>
+        </form>
+      </div>
+
+      {errorRango && (
+        <p class="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800
+                  dark:bg-red-950 dark:text-red-200">
+          {errorRango}
+        </p>
+      )}
+
+      {ingresos && (
+        <>
+          <div class="flex flex-wrap items-baseline justify-between gap-3 rounded-2xl bg-white
+                      p-5 shadow-sm dark:bg-slate-900">
+            <div>
+              <p class="text-3xl font-bold tabular-nums">{money(ingresos.total)}</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                {ingresos.tickets} tickets · {ingresos.desde} a {ingresos.hasta}
+              </p>
+            </div>
+            <a
+              href={`/api/v1/t/${tenant}/reportes/ingresos.csv${sufijo}`}
+              class="rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700
+                     dark:bg-slate-800 dark:text-slate-200"
+            >
+              Descargar CSV
+            </a>
+          </div>
+
+          {ingresos.por_dia.length > 0 && (
+            <div class="overflow-x-auto rounded-2xl bg-white p-5 shadow-sm dark:bg-slate-900">
+              <ul class="flex min-w-max items-end gap-1.5" style="height: 140px">
+                {ingresos.por_dia.map((f: any) => (
+                  <li class="flex w-10 flex-col items-center justify-end gap-1">
+                    <span class="text-[10px] tabular-nums text-slate-500">
+                      {Math.round(Number(f.total) / 1000)}k
+                    </span>
+                    <div
+                      class="w-full rounded-t bg-brand-500"
+                      style={`height: ${maximo ? Math.max(4, (Number(f.total) / maximo) * 100) : 4}px`}
+                      title={`${f.dia}: ${money(f.total)}`}
+                    />
+                    <span class="text-[10px] text-slate-400">{f.dia.slice(8)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <TablaConceptos titulo="Por forma de pago" filas={ingresos.por_metodo} />
+            <TablaConceptos titulo="Por tipo de vehículo" filas={ingresos.por_tipo} />
+          </div>
+        </>
+      )}
+    </section>
+
+    {puedeVerCaja && descuadres.length > 0 && (
+      <section class="space-y-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Turnos que no cuadraron
+        </h2>
+        <ul class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
+          {descuadres.map((t: any) => (
+            <li class="flex items-baseline justify-between gap-3 border-b border-slate-100
+                       px-4 py-3 last:border-0 dark:border-slate-800">
+              <div class="min-w-0">
+                <p class="text-sm">
+                  {new Date(t.abierto_at).toLocaleDateString('es-CO')}
+                </p>
+                <p class="truncate text-xs text-slate-500">
+                  esperado {money(t.esperado)} · contado {money(t.contado)}
+                </p>
+              </div>
+              <p
+                class:list={[
+                  'shrink-0 font-semibold tabular-nums',
+                  Number(t.diferencia) < 0
+                    ? 'text-red-700 dark:text-red-400'
+                    : 'text-emerald-700 dark:text-emerald-400',
+                ]}
+              >
+                {money(t.diferencia)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </main>
+</Base>
+

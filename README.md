@@ -87,6 +87,8 @@ salen de ahí:
 | `/t/{slug}/ingresar` | Tipo de vehículo en botones, placa, listo |
 | `/t/{slug}/buscar` | Se teclean los últimos dígitos de la placa |
 | `/t/{slug}/tickets/{id}` | Tiempo y valor en vivo, artículos, cobro y recibo |
+| `/t/{slug}/caja` | Abrir turno, movimientos y cierre con conteo a ciegas |
+| `/t/{slug}/reportes` | Ocupación, ingresos y turnos descuadrados |
 
 Tres cosas del cobro que evitan cobrar de más, de menos o dos veces:
 
@@ -101,6 +103,31 @@ Tres cosas del cobro que evitan cobrar de más, de menos o dos veces:
 Una placa que ya está adentro **advierte, no bloquea** (D6): la API
 responde 409 con el ticket existente y el operario decide si fue un error
 de digitación o son dos vehículos.
+
+## Caja y reportes
+
+El arqueo responde una sola pregunta: **¿cuadra el cajón?** Cuatro
+decisiones hacen que ese número signifique algo:
+
+- **Solo cuenta efectivo.** Una tarjeta no llega al cajón; sumarla haría
+  que todos los turnos aparecieran descuadrados. Se reporta aparte.
+- **Suma el cobro, no lo que entregó el cliente.** Los $50.000 con los que
+  paga un servicio de $9.000 dejan $9.000 en la caja: el resto salió como
+  cambio.
+- **`esperado` se congela al cerrar.** Si se recalculara, una anulación
+  posterior descuadraría un turno que ya había cuadrado.
+- **El conteo es a ciegas.** Mientras el turno está abierto, el operario no
+  ve cuánto debería haber. Si lo viera, teclearía ese número al cerrar y el
+  arqueo no mediría nada. Quien tiene `cash:read` sí lo ve siempre, y el
+  operario ve la diferencia después de confirmar su conteo.
+
+Cobrar sin turno abierto **no se bloquea** —sería dejar tirado al operario
+a mitad de jornada— pero el pago queda sin turno y el resumen lo señala
+aparte, para que el dueño lo vea en vez de que desaparezca.
+
+Los reportes (`/t/{slug}/reportes`) agregan en SQL y agrupan por la hora de
+la sede: un turno que termina a la 1 de la mañana pertenece al día anterior
+para quien lo trabajó. Hay export CSV.
 
 ## Cómo funciona el aislamiento entre clientes
 
@@ -180,11 +207,12 @@ para que construir una no sobrescriba la otra.
 - **Fase 1** — tenancy con RLS, usuarios, roles, dispositivos y bitácora.
 - **Fase 2** — catálogos parametrizables, motor de tarifas y simulador.
 - **Fase 3** — ingreso, búsqueda por placa, cobro idempotente y recibo.
+- **Fase 4** — turnos de caja, arqueo a ciegas y reportes.
 
-182 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
+220 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
 aceptación de la fase 1 —un tenant no lee ni un registro de otro ni
-forzando identificadores—, la batería de tarifas del motor y el cobro
-concurrente.
+forzando identificadores—, la batería de tarifas del motor, el cobro
+concurrente y la aritmética del arqueo.
 
-Sigue la **fase 4**: caja y reportes. Turnos, arqueo, ocupación e
-ingresos.
+Sigue la **fase 5**: mensualidades, PWA con cola de sincronización para
+trabajar sin señal, e impresión térmica.

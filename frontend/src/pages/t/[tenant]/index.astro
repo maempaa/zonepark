@@ -30,6 +30,8 @@ const abiertos: Ticket[] = abiertosRes?.ok ? await abiertosRes.json() : [];
 
 const puedeIngresar = perfil.permisos.includes('ticket:create');
 const puedeVerTarifas = perfil.permisos.includes('rate:read');
+const puedeCaja = perfil.permisos.includes('cash:operate');
+const puedeReportes = perfil.permisos.includes('report:read');
 ---
 <Base titulo={perfil.tenant_nombre}>
   <header class="flex items-start justify-between gap-3 px-5 pt-8 pb-6">
@@ -101,6 +103,34 @@ const puedeVerTarifas = perfil.permisos.includes('rate:read');
           ))}
         </ul>
       </section>
+    )}
+
+    {puedeCaja && (
+      <a
+        href={`/t/${tenant}/caja`}
+        class="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm
+               active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800"
+      >
+        <div>
+          <p class="font-semibold">Caja</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Turno, movimientos y cierre</p>
+        </div>
+        <span class="text-slate-400">→</span>
+      </a>
+    )}
+
+    {puedeReportes && (
+      <a
+        href={`/t/${tenant}/reportes`}
+        class="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm
+               active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800"
+      >
+        <div>
+          <p class="font-semibold">Reportes</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Ocupación e ingresos</p>
+        </div>
+        <span class="text-slate-400">→</span>
+      </a>
     )}
 
     {puedeVerTarifas && (
