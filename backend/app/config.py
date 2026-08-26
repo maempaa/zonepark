@@ -2,7 +2,12 @@
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# El repositorio es público: este valor lo puede leer cualquiera, así que
+# no debe llegar nunca a un despliegue real.
+SECRETO_DE_EJEMPLO = "dev_secret_cambiar_en_produccion"
 
 
 class Settings(BaseSettings):
@@ -18,7 +23,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://redis:6379/0"
 
     # Seguridad
-    jwt_secret: str = "dev_secret_cambiar_en_produccion"
+    jwt_secret: str = SECRETO_DE_EJEMPLO
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     cors_origins: str = ""
@@ -39,6 +44,20 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() in {"production", "prod"}
+
+    @model_validator(mode="after")
+    def _exigir_secreto_propio(self) -> "Settings":
+        """Arrancar en producción con el secreto de ejemplo es un fallo grave.
+
+        Cualquiera que lea el repositorio podría firmar tokens de acceso
+        válidos. Mejor que el servicio no levante a que levante inseguro.
+        """
+        if self.is_production and self.jwt_secret == SECRETO_DE_EJEMPLO:
+            raise ValueError(
+                "JWT_SECRET sigue en el valor de ejemplo. "
+                "Genera uno propio con `openssl rand -hex 32`."
+            )
+        return self
 
 
 @lru_cache
