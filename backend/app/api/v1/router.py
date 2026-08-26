@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, health, meta, sedes
+from app.api.v1 import auth, catalogo, health, meta, sedes, tarifas
 
 # Rutas que no dependen de ningún tenant.
 api_router = APIRouter()
@@ -12,5 +12,7 @@ api_router.include_router(meta.router)
 tenant_router = APIRouter(prefix="/t/{tenant_slug}")
 tenant_router.include_router(auth.router)
 tenant_router.include_router(sedes.router)
+tenant_router.include_router(catalogo.router)
+tenant_router.include_router(tarifas.router)
 
 api_router.include_router(tenant_router)
