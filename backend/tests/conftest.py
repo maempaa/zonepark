@@ -12,8 +12,10 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
+from app.db.seed import sembrar_catalogos_y_tarifas
 from app.db.session import engine, system_scope
 from app.main import app
+from app.models.catalogo import VehicleType
 from app.models.parking_lot import DevicePolicy, ParkingLot
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -43,6 +45,7 @@ class TenantDePrueba:
     operario: str
     sede_asignada: uuid.UUID
     sede_ajena: uuid.UUID
+    tipos: dict[str, uuid.UUID]
 
 
 async def _crear_tenant_de_prueba(session, etiqueta: str) -> TenantDePrueba:
@@ -69,7 +72,18 @@ async def _crear_tenant_de_prueba(session, etiqueta: str) -> TenantDePrueba:
         session, tenant=tenant, email=operario, nombre="Operario",
         password=CLAVE, rol_codigo="operator", pin=PIN, sedes=[s1],
     )
-    return TenantDePrueba(slug, tenant.id, admin, operario, s1.id, s2.id)
+
+    # Catálogos y plan tarifario, los mismos que usa el seed de desarrollo.
+    await sembrar_catalogos_y_tarifas(session, tenant)
+    tipos = {
+        t.codigo: t.id
+        for t in (
+            await session.scalars(
+                select(VehicleType).where(VehicleType.tenant_id == tenant.id)
+            )
+        ).all()
+    }
+    return TenantDePrueba(slug, tenant.id, admin, operario, s1.id, s2.id, tipos)
 
 
 @pytest.fixture

@@ -20,6 +20,19 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def incluir_objeto(objeto, nombre, tipo, reflejado, comparar_con) -> bool:
+    """Filtra qué compara el autogenerate.
+
+    Las CHECK de los enums no nativos las crea SQLAlchemy al emitir el DDL,
+    pero Alembic no consigue emparejarlas con el modelo al reflejar: las ve
+    como sobrantes y propone borrarlas en **cada** migración nueva. Ya pasó
+    una vez y dejó tres columnas aceptando cualquier cadena.
+
+    Las CHECK que se quieran de verdad se escriben a mano en su migración.
+    """
+    return tipo != "check_constraint"
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=config.get_main_option("sqlalchemy.url"),
@@ -27,6 +40,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=incluir_objeto,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -38,6 +52,7 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         compare_type=True,
         compare_server_default=True,
+        include_object=incluir_objeto,
     )
     with context.begin_transaction():
         context.run_migrations()
