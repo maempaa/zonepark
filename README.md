@@ -76,6 +76,32 @@ El **simulador** (`/t/{slug}/config/tarifas`) cotiza contra cualquier plan,
 incluidos los borradores. Es la red de seguridad para probar una tarifa
 antes de que alguien la esté pagando.
 
+## Operación
+
+El operario trabaja de pie, con una mano y con mala señal. Las pantallas
+salen de ahí:
+
+| Pantalla | Qué resuelve |
+|---|---|
+| `/t/{slug}` | Cuántos vehículos hay adentro y dos botones grandes |
+| `/t/{slug}/ingresar` | Tipo de vehículo en botones, placa, listo |
+| `/t/{slug}/buscar` | Se teclean los últimos dígitos de la placa |
+| `/t/{slug}/tickets/{id}` | Tiempo y valor en vivo, artículos, cobro y recibo |
+
+Tres cosas del cobro que evitan cobrar de más, de menos o dos veces:
+
+- **Es idempotente.** Bloquea la fila del ticket y, si ya estaba cerrado,
+  devuelve lo que se cobró la primera vez. Pulsar dos veces sin señal no
+  cobra dos veces. `Idempotency-Key` es la segunda red.
+- **Usa un único instante** para cotizar y para registrar la salida, para
+  que el importe cobrado y el registrado no puedan discrepar.
+- **Lo que se cobra sale del snapshot del ticket**, no de las tablas,
+  aunque el administrador cambie las tarifas con el carro adentro.
+
+Una placa que ya está adentro **advierte, no bloquea** (D6): la API
+responde 409 con el ticket existente y el operario decide si fue un error
+de digitación o son dos vehículos.
+
 ## Cómo funciona el aislamiento entre clientes
 
 El tenant viaja en la ruta: `/t/central/...`. La resolución vive aislada en
@@ -153,10 +179,12 @@ para que construir una no sobrescriba la otra.
 - **Fase 0** — andamiaje dockerizado, verificado de punta a punta.
 - **Fase 1** — tenancy con RLS, usuarios, roles, dispositivos y bitácora.
 - **Fase 2** — catálogos parametrizables, motor de tarifas y simulador.
+- **Fase 3** — ingreso, búsqueda por placa, cobro idempotente y recibo.
 
-133 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
+182 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
 aceptación de la fase 1 —un tenant no lee ni un registro de otro ni
-forzando identificadores— y la batería de tarifas del motor.
+forzando identificadores—, la batería de tarifas del motor y el cobro
+concurrente.
 
-Sigue la **fase 3**: operación. Registrar el ingreso, buscar por placa,
-cotizar en vivo y cobrar con idempotencia.
+Sigue la **fase 4**: caja y reportes. Turnos, arqueo, ocupación e
+ingresos.

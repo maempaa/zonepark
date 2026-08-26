@@ -1,0 +1,64 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import CobrarTicket from '../../../../components/CobrarTicket';
+import { llamarApi } from '../../../../lib/api';
+
+const { tenant, id } = Astro.params;
+
+const perfilRes = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect(`/t/${tenant}/login`);
+const perfil = await perfilRes.json();
+
+const ticketRes = await llamarApi(Astro.cookies, tenant!, `/tickets/${id}`);
+if (!ticketRes || ticketRes.status === 404) {
+  return new Response('No existe ese ticket', { status: 404 });
+}
+if (!ticketRes.ok) {
+  return new Response('No puedes ver este ticket', { status: ticketRes.status });
+}
+const ticket = await ticketRes.json();
+
+const articulosRes = await llamarApi(Astro.cookies, tenant!, '/articulos');
+const articulos = articulosRes?.ok ? await articulosRes.json() : [];
+
+const puedeCobrar = perfil.permisos.includes('ticket:checkout');
+---
+<Base titulo={ticket.placa ?? ticket.codigo}>
+  <header class="px-5 pt-8 pb-5">
+    <a href={`/t/${tenant}/buscar`} class="text-sm font-medium text-brand-600 dark:text-brand-500">
+      ← Buscar
+    </a>
+  </header>
+
+  <main class="flex-1 px-5 pb-10">
+    {ticket.estado === 'anulado' ? (
+      <div class="rounded-2xl bg-slate-200 p-6 text-center dark:bg-slate-800">
+        <p class="text-lg font-semibold">Ticket anulado</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          {ticket.anulacion_motivo}
+        </p>
+      </div>
+    ) : ticket.estado === 'cerrado' ? (
+      <div class="rounded-2xl bg-white p-6 text-center shadow-sm dark:bg-slate-900">
+        <p class="text-2xl font-bold">{ticket.placa ?? ticket.codigo}</p>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Ya fue cobrado y cerrado.
+        </p>
+      </div>
+    ) : puedeCobrar ? (
+      <CobrarTicket
+        tenant={tenant!}
+        ticket={ticket}
+        articulos={articulos}
+        client:load
+      />
+    ) : (
+      <div class="rounded-2xl bg-white p-6 text-center shadow-sm dark:bg-slate-900">
+        <p class="text-2xl font-bold">{ticket.placa ?? ticket.codigo}</p>
+        <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Tu rol no cobra tickets.
+        </p>
+      </div>
+    )}
+  </main>
+</Base>
