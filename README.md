@@ -43,6 +43,39 @@ de aparecer el día que entra el segundo cliente real.
 | central | `operario@central.com.co` | `central12345` (PIN `482913`) | Operario | S1 |
 | [norte](http://localhost:4321/t/norte) | `admin@norte.com.co` | `norte12345` | Administrador | Todas las sedes |
 
+## Tarifas
+
+Todo es parametrizable desde la base, sin desplegar nada: los tipos de
+vehículo y los artículos son tablas por tenant, no enums.
+
+El motor vive en [`domain/pricing`](backend/app/domain/pricing) como
+funciones puras. Siete modos de cobro, y el que más se usa —"hora o
+fracción"— es el mismo que "media hora o fracción" y que "por minuto"
+cambiando un número: `bloque_minutos`. No hay código nuevo por variante.
+
+Encima van los modificadores: cortesía, cobro mínimo, tope por cada 24 h,
+redondeo a múltiplos de efectivo, IVA incluido o agregado, escalones y
+franjas horarias (nocturna, fin de semana, festivo).
+
+Dos decisiones que conviene conocer antes de configurar una tarifa:
+
+- **Los modificadores salen de la regla vigente a la entrada**, aunque la
+  estadía cruce franjas. Si dependieran del tramo, bastaría con entrar
+  justo antes de un cambio de franja para elegir el más conveniente.
+- **Solo se segmentan por franja los modos que cobran por unidad de
+  tiempo.** Los demás se refieren a la posición dentro de la estadía —la
+  primera hora, los escalones, el precio único— y partirlos daría
+  resultados que nadie sabría explicarle a un cliente.
+
+Al abrir un ticket se congela el JSON de las reglas que le aplican. A
+partir de ahí ese ticket ya no depende de la tabla: si suben la tarifa, o
+alguien archiva el plan, se sigue cotizando con lo que se le prometió al
+cliente al entrar.
+
+El **simulador** (`/t/{slug}/config/tarifas`) cotiza contra cualquier plan,
+incluidos los borradores. Es la red de seguridad para probar una tarifa
+antes de que alguien la esté pagando.
+
 ## Cómo funciona el aislamiento entre clientes
 
 El tenant viaja en la ruta: `/t/central/...`. La resolución vive aislada en
@@ -119,9 +152,11 @@ para que construir una no sobrescriba la otra.
 
 - **Fase 0** — andamiaje dockerizado, verificado de punta a punta.
 - **Fase 1** — tenancy con RLS, usuarios, roles, dispositivos y bitácora.
-  36 pruebas contra Postgres real, incluido el criterio de aceptación:
-  un tenant no lee ni un registro de otro ni forzando identificadores.
+- **Fase 2** — catálogos parametrizables, motor de tarifas y simulador.
 
-Sigue la **fase 2**: parametrización (tipos de vehículo, artículos) y el
-motor de tarifas. Es la fase de mayor riesgo del proyecto y por eso se
-construye antes que la operación.
+133 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
+aceptación de la fase 1 —un tenant no lee ni un registro de otro ni
+forzando identificadores— y la batería de tarifas del motor.
+
+Sigue la **fase 3**: operación. Registrar el ingreso, buscar por placa,
+cotizar en vivo y cobrar con idempotencia.

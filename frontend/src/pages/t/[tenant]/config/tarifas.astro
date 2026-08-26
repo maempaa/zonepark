@@ -1,0 +1,99 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import SimuladorTarifas from '../../../../components/SimuladorTarifas';
+import { llamarApi } from '../../../../lib/api';
+
+const { tenant } = Astro.params;
+
+interface Plan { id: string; codigo: string; nombre: string; version: number; estado: string }
+interface Tipo { id: string; codigo: string; nombre: string }
+
+const perfilRes = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect(`/t/${tenant}/login`);
+const perfil = await perfilRes.json();
+
+if (!perfil.permisos.includes('rate:read')) {
+  return new Response('No tienes permiso para ver las tarifas', { status: 403 });
+}
+
+const planesRes = await llamarApi(Astro.cookies, tenant!, '/planes');
+const planes: Plan[] = planesRes?.ok ? await planesRes.json() : [];
+
+const tiposRes = await llamarApi(Astro.cookies, tenant!, '/tipos-vehiculo');
+const tipos: Tipo[] = tiposRes?.ok ? await tiposRes.json() : [];
+
+const activo = planes.find((p) => p.estado === 'activo');
+---
+<Base titulo="Tarifas" ancho>
+  <header class="px-5 pt-8 pb-6">
+    <a
+      href={`/t/${tenant}`}
+      class="text-sm font-medium text-brand-600 hover:underline dark:text-brand-500"
+    >
+      ← Volver
+    </a>
+    <h1 class="mt-2 text-xl font-bold">Tarifas</h1>
+    <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+      {activo
+        ? `Vigente: ${activo.nombre} (v${activo.version})`
+        : 'No hay ningún plan activo'}
+    </p>
+  </header>
+
+  <main class="flex-1 space-y-8 px-5 pb-12">
+    {planes.length === 0 || tipos.length === 0 ? (
+      <p class="rounded-2xl bg-white p-5 text-sm text-slate-500 shadow-sm
+                dark:bg-slate-900 dark:text-slate-400">
+        Todavía no hay planes tarifarios ni tipos de vehículo. Corre
+        <code class="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">
+          make seed
+        </code>
+        para cargar los de ejemplo.
+      </p>
+    ) : (
+      <>
+        <section class="space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Simulador
+          </h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            Prueba una tarifa antes de publicarla. Funciona también sobre los
+            borradores, así que ningún cliente está pagando lo que estás probando.
+          </p>
+          <SimuladorTarifas tenant={tenant!} planes={planes} tipos={tipos} client:load />
+        </section>
+
+        <section class="space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Planes
+          </h2>
+          <ul class="space-y-2">
+            {planes.map((plan) => (
+              <li class="flex items-center justify-between gap-3 rounded-2xl bg-white p-4
+                         shadow-sm dark:bg-slate-900">
+                <div class="min-w-0">
+                  <p class="truncate font-medium">{plan.nombre}</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    {plan.codigo} · versión {plan.version}
+                  </p>
+                </div>
+                <span
+                  class:list={[
+                    'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
+                    plan.estado === 'activo'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : plan.estado === 'borrador'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+                  ]}
+                >
+                  {plan.estado}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </>
+    )}
+  </main>
+</Base>

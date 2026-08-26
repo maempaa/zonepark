@@ -31,6 +31,7 @@ const respuestaSedes = await llamarApi(Astro.cookies, tenant!, '/sedes');
 const sedes: Sede[] = respuestaSedes?.ok ? await respuestaSedes.json() : [];
 
 const puedeCobrar = perfil.permisos.includes('ticket:checkout');
+const puedeVerTarifas = perfil.permisos.includes('rate:read');
 ---
 <Base titulo={perfil.tenant_nombre}>
   <header class="flex items-start justify-between gap-3 px-5 pt-8 pb-6">
@@ -71,6 +72,22 @@ const puedeCobrar = perfil.permisos.includes('ticket:checkout');
         )}
       </ul>
     </section>
+
+    {puedeVerTarifas && (
+      <a
+        href={`/t/${tenant}/config/tarifas`}
+        class="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 shadow-sm
+               active:bg-slate-50 dark:bg-slate-900 dark:active:bg-slate-800"
+      >
+        <div>
+          <p class="font-semibold">Tarifas</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            Planes vigentes y simulador
+          </p>
+        </div>
+        <span class="text-slate-400">→</span>
+      </a>
+    )}
 
     <section class="rounded-2xl border border-dashed border-slate-300 p-5 text-center
                     dark:border-slate-700">
