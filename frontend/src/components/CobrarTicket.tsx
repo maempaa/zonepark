@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
  * operario no tiene que pulsar nada para saber cuánto va.
  *
  * La llave de idempotencia se genera **una vez por intento de cobro** y se
- * reutiliza en los reintentos. Es lo que hace que pulsar dos veces con mala
+ * reutiliza en los reintentos: es lo que hace que pulsar dos veces con mala
  * señal no cobre dos veces.
  */
 
@@ -18,11 +18,7 @@ interface Ticket {
   entrada_at: string;
   estado: string;
 }
-interface Linea {
-  concepto: string;
-  monto: string;
-  detalle: string | null;
-}
+interface Linea { concepto: string; monto: string; detalle: string | null }
 interface Cotizacion {
   minutos: number;
   lineas: Linea[];
@@ -37,11 +33,7 @@ interface Pago {
   recibido: string | null;
   cambio: string | null;
 }
-interface Articulo {
-  codigo: string;
-  nombre: string;
-  precio: string;
-}
+interface Articulo { codigo: string; nombre: string; precio: string }
 
 const METODOS: Array<[string, string]> = [
   ['efectivo', 'Efectivo'],
@@ -50,20 +42,41 @@ const METODOS: Array<[string, string]> = [
   ['transferencia', 'Transferencia'],
 ];
 
-function pesos(valor: string | number): string {
+// Denominaciones habituales en Colombia, para no teclear el monto entero.
+const BILLETES = [2000, 5000, 10000, 20000, 50000];
+
+function pesos(v: string | number): string {
   return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(Number(valor));
+    style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+  }).format(Number(v));
 }
 
 function transcurrido(desde: string): string {
   const minutos = Math.max(0, Math.floor((Date.now() - new Date(desde).getTime()) / 60000));
   const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
+  return h ? `${h} h ${String(minutos % 60).padStart(2, '0')}` : `${minutos} min`;
 }
+
+function Icono({ d, className = 'h-6 w-6 shrink-0' }: { d: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
+         strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {d.split('|').map((p, i) => <path key={i} d={p} />)}
+    </svg>
+  );
+}
+
+const CHECK = 'm4 12 6 6L20 6';
+const ALERTA = 'M12 7v6|M12 16.5v.01';
+
+const BOTON_PRIMARIO =
+  'w-full rounded-zp border-2 border-outline bg-primary px-4 py-5 text-zp-xl font-extrabold ' +
+  'uppercase tracking-wide text-on-primary transition active:bg-primary-container ' +
+  'disabled:border-outline-variant disabled:bg-surface-container-high ' +
+  'disabled:text-on-surface-variant';
+const BOTON_LLANO =
+  'w-full rounded-zp border-2 border-outline bg-surface-container-lowest px-4 py-4 ' +
+  'text-zp-body font-bold text-on-surface active:bg-surface-container';
 
 interface Props {
   tenant: string;
@@ -98,10 +111,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
     void traerCotizacion();
     const tictac = setInterval(() => setReloj(transcurrido(ticket.entrada_at)), 10_000);
     const refresco = setInterval(traerCotizacion, 30_000);
-    return () => {
-      clearInterval(tictac);
-      clearInterval(refresco);
-    };
+    return () => { clearInterval(tictac); clearInterval(refresco); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cerrado]);
 
@@ -117,6 +127,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
   function abrirCobro() {
     // Una llave por intento: los reintentos la reutilizan.
     llave.current = crypto.randomUUID();
+    setRecibido('');
     setError('');
     setCobrando(true);
   }
@@ -157,9 +168,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
       ...recibo.cotizacion.lineas.map((l) => `${l.concepto}: ${pesos(l.monto)}`),
       '',
       `TOTAL: ${pesos(recibo.pago.monto)}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    ].filter(Boolean).join('\n');
 
     try {
       if (navigator.share) await navigator.share({ text: texto });
@@ -171,68 +180,73 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
 
   // ── Recibo ────────────────────────────────────────────────────────────
   if (recibo) {
+    const cambio = Number(recibo.pago.cambio ?? 0);
     return (
-      <div className="space-y-5">
-        <div className="rounded-2xl bg-emerald-50 p-6 text-center dark:bg-emerald-950">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Cobrado</p>
-          <p className="mt-1 text-4xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">
+      <div className="space-y-4">
+        <div className="rounded-zp border-2 border-success bg-surface-container-lowest p-6 text-center">
+          <p className="flex items-center justify-center gap-2 text-zp-body font-bold
+                        uppercase tracking-wide text-success">
+            <Icono d={CHECK} className="h-6 w-6" /> Cobrado
+          </p>
+          <p className="mt-3 text-zp-3xl font-extrabold leading-none tabular-nums">
             {pesos(recibo.pago.monto)}
           </p>
-          {recibo.pago.cambio !== null && Number(recibo.pago.cambio) > 0 && (
-            <p className="mt-3 text-lg font-semibold text-emerald-800 dark:text-emerald-200">
-              Cambio: {pesos(recibo.pago.cambio)}
-            </p>
-          )}
+          {ticket.placa && <span className="placa mt-4 text-zp-lg">{ticket.placa}</span>}
         </div>
+
+        {cambio > 0 && (
+          <div className="rounded-zp border-2 border-outline bg-primary p-6 text-center
+                          text-on-primary">
+            <p className="text-zp-caption font-bold uppercase tracking-wide">Cambio a devolver</p>
+            <p className="mt-1 text-zp-3xl font-extrabold leading-none tabular-nums">
+              {pesos(cambio)}
+            </p>
+          </div>
+        )}
 
         <Desglose cotizacion={recibo.cotizacion} />
 
-        <div className="space-y-3">
-          <button
-            onClick={compartir}
-            className="w-full rounded-xl bg-white px-4 py-4 text-lg font-semibold text-slate-900
-                       shadow-sm active:bg-slate-100 dark:bg-slate-900 dark:text-slate-100"
-          >
-            Compartir recibo
-          </button>
-          <a
-            href={`/t/${tenant}/buscar`}
-            className="block w-full rounded-xl bg-brand-600 px-4 py-4 text-center text-lg
-                       font-semibold text-white active:bg-brand-700"
-          >
-            Siguiente vehículo
-          </a>
-        </div>
+        <button onClick={compartir} className={BOTON_LLANO}>Compartir recibo</button>
+        <a href={`/t/${tenant}/buscar`} className={`${BOTON_PRIMARIO} block text-center`}>
+          Siguiente vehículo
+        </a>
       </div>
     );
   }
 
   // ── Confirmación de cobro ─────────────────────────────────────────────
   if (cobrando && cotizacion) {
-    const faltante = Number(recibido || 0) - Number(cotizacion.total);
+    const vuelto = Number(recibido || 0) - Number(cotizacion.total);
+    const falta = recibido !== '' && vuelto < 0;
     return (
       <div className="space-y-5">
-        <div className="rounded-2xl bg-white p-5 text-center shadow-sm dark:bg-slate-900">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Total a cobrar</p>
-          <p className="text-4xl font-bold tabular-nums">{pesos(cotizacion.total)}</p>
+        <div className="rounded-zp border-2 border-outline bg-surface-container-lowest p-6 text-center">
+          <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+            Total a cobrar
+          </p>
+          <p className="mt-1 text-zp-3xl font-extrabold leading-none tabular-nums">
+            {pesos(cotizacion.total)}
+          </p>
         </div>
 
-        <fieldset className="space-y-2">
-          <legend className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+        <fieldset>
+          <legend className="mb-3 text-zp-caption font-bold uppercase tracking-wide
+                             text-on-surface-variant">
             Forma de pago
           </legend>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-3">
             {METODOS.map(([valor, texto]) => (
               <button
                 key={valor}
                 type="button"
                 onClick={() => setMetodo(valor)}
                 aria-pressed={metodo === valor}
-                className={`rounded-xl px-3 py-4 text-base font-medium transition ${
-                  metodo === valor
-                    ? 'bg-brand-600 text-white shadow-md'
-                    : 'bg-white text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200'
-                }`}
+                className={`rounded-zp border-2 border-outline px-3 py-4 text-zp-body font-bold
+                            transition ${
+                              metodo === valor
+                                ? 'bg-primary text-on-primary'
+                                : 'bg-surface-container-lowest active:bg-surface-container'
+                            }`}
               >
                 {texto}
               </button>
@@ -241,76 +255,102 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
         </fieldset>
 
         {metodo === 'efectivo' && (
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          <div className="space-y-3">
+            <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
               ¿Con cuánto paga?
-            </span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {BILLETES.filter((b) => b >= Number(cotizacion.total)).slice(0, 4).map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setRecibido(String(b))}
+                  className="rounded-zp border-2 border-outline bg-surface-container-lowest px-4
+                             py-3 text-zp-body font-bold tabular-nums active:bg-surface-container"
+                >
+                  {pesos(b)}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRecibido(String(Math.ceil(Number(cotizacion.total))))}
+                className="rounded-zp border-2 border-outline bg-surface-container-lowest px-4
+                           py-3 text-zp-body font-bold active:bg-surface-container"
+              >
+                Exacto
+              </button>
+            </div>
             <input
               inputMode="numeric"
               value={recibido}
               onChange={(e) => setRecibido(e.target.value.replace(/\D/g, ''))}
               placeholder="0"
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-center
-                         text-2xl font-bold tabular-nums outline-none focus:border-brand-500
-                         dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              className="w-full rounded-zp border-2 border-outline bg-surface-container-lowest
+                         px-4 py-4 text-center text-zp-2xl font-extrabold tabular-nums"
             />
-            {recibido && faltante >= 0 && (
-              <p className="text-center text-lg font-semibold text-emerald-700 dark:text-emerald-400">
-                Cambio: {pesos(faltante)}
+            {recibido && !falta && (
+              <div className="rounded-zp border-2 border-outline bg-primary p-4 text-center
+                              text-on-primary">
+                <p className="text-zp-caption font-bold uppercase tracking-wide">Cambio</p>
+                <p className="text-zp-2xl font-extrabold tabular-nums">{pesos(vuelto)}</p>
+              </div>
+            )}
+            {falta && (
+              <p className="flex items-center gap-2 rounded-zp border-2 border-error
+                            bg-surface-container-lowest px-4 py-3 text-zp-body font-bold text-error">
+                <Icono d={ALERTA} /> Faltan {pesos(-vuelto)}
               </p>
             )}
-            {recibido && faltante < 0 && (
-              <p className="text-center text-sm font-medium text-red-700 dark:text-red-400">
-                Faltan {pesos(-faltante)}
-              </p>
-            )}
-          </label>
+          </div>
         )}
 
         {error && (
-          <p
-            role="alert"
-            className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800
-                       dark:bg-red-950 dark:text-red-200"
-          >
-            {error}
+          <p role="alert"
+             className="flex items-start gap-3 rounded-zp border-2 border-error
+                        bg-surface-container-lowest px-4 py-3 text-zp-body font-semibold text-error">
+            <Icono d={ALERTA} /> <span>{error}</span>
           </p>
         )}
 
-        <div className="space-y-3">
-          <button
-            onClick={confirmar}
-            disabled={enviando || (metodo === 'efectivo' && recibido !== '' && faltante < 0)}
-            className="w-full rounded-xl bg-emerald-600 px-4 py-5 text-xl font-semibold text-white
-                       active:bg-emerald-700 disabled:bg-slate-400"
-          >
-            {enviando ? 'Cobrando…' : 'Confirmar cobro'}
-          </button>
-          <button
-            onClick={() => setCobrando(false)}
-            className="w-full py-2 text-sm font-medium text-slate-600 dark:text-slate-300"
-          >
-            Volver
-          </button>
-        </div>
+        <button onClick={confirmar} disabled={enviando || falta} className={BOTON_PRIMARIO}>
+          {enviando ? 'Cobrando…' : 'Confirmar cobro'}
+        </button>
+        <button
+          onClick={() => setCobrando(false)}
+          className="w-full py-2 text-zp-caption font-bold uppercase tracking-wide
+                     text-on-surface-variant"
+        >
+          Volver
+        </button>
       </div>
     );
   }
 
   // ── Vista en vivo ─────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl bg-white p-5 text-center shadow-sm dark:bg-slate-900">
-        <p className="text-3xl font-bold tracking-wide">{ticket.placa ?? 'Sin placa'}</p>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{ticket.codigo}</p>
-        <div className="mt-4 flex items-baseline justify-center gap-6">
+    <div className="space-y-4">
+      <div className="rounded-zp border-2 border-outline bg-surface-container-lowest p-6 text-center">
+        {ticket.placa ? (
+          <span className="placa text-zp-2xl">{ticket.placa}</span>
+        ) : (
+          <p className="text-zp-2xl font-extrabold">{ticket.codigo}</p>
+        )}
+        {ticket.placa && (
+          <p className="mt-2 text-zp-caption text-on-surface-variant">{ticket.codigo}</p>
+        )}
+
+        <div className="mt-6 grid grid-cols-2 gap-4 border-t-2 border-outline pt-5">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">Tiempo</p>
-            <p className="text-xl font-semibold tabular-nums">{reloj}</p>
+            <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+              Tiempo
+            </p>
+            <p className="mt-1 text-zp-xl font-extrabold tabular-nums">{reloj}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">Va en</p>
-            <p className="text-3xl font-bold tabular-nums">
+            <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+              Va en
+            </p>
+            <p className="mt-1 text-zp-2xl font-extrabold leading-none tabular-nums">
               {cotizacion ? pesos(cotizacion.total) : '…'}
             </p>
           </div>
@@ -320,15 +360,17 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
       {cotizacion && <Desglose cotizacion={cotizacion} />}
 
       {articulos.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Agregar</p>
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-3">
+          <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+            Agregar
+          </p>
+          <div className="flex flex-wrap gap-3">
             {articulos.map((a) => (
               <button
                 key={a.codigo}
                 onClick={() => agregar(a.codigo)}
-                className="rounded-lg bg-white px-3 py-2.5 text-sm font-medium shadow-sm
-                           active:bg-slate-100 dark:bg-slate-900 dark:active:bg-slate-800"
+                className="rounded-zp border-2 border-outline bg-surface-container-lowest px-4
+                           py-3 text-zp-body font-bold active:bg-surface-container"
               >
                 + {a.nombre} · {pesos(a.precio)}
               </button>
@@ -337,12 +379,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
         </div>
       )}
 
-      <button
-        onClick={abrirCobro}
-        disabled={!cotizacion}
-        className="w-full rounded-xl bg-emerald-600 px-4 py-5 text-xl font-semibold text-white
-                   active:bg-emerald-700 disabled:bg-slate-400"
-      >
+      <button onClick={abrirCobro} disabled={!cotizacion} className={BOTON_PRIMARIO}>
         Cobrar y cerrar
       </button>
     </div>
@@ -351,24 +388,28 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
 
 function Desglose({ cotizacion }: { cotizacion: Cotizacion }) {
   return (
-    <section className="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
-      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+    <section className="overflow-hidden rounded-zp border-2 border-outline
+                        bg-surface-container-lowest">
+      <ul>
         {cotizacion.lineas.map((linea, i) => (
-          <li key={i} className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+          <li key={i} className="flex items-baseline justify-between gap-3 border-b
+                                 border-outline-variant px-4 py-3 last:border-0">
             <div className="min-w-0">
-              <p className="truncate text-sm">{linea.concepto}</p>
+              <p className="truncate text-zp-body">{linea.concepto}</p>
               {linea.detalle && (
-                <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                <p className="truncate text-zp-caption text-on-surface-variant">
                   {linea.detalle}
                 </p>
               )}
             </div>
-            <p className="shrink-0 text-sm tabular-nums">{pesos(linea.monto)}</p>
+            <p className="shrink-0 text-zp-body font-semibold tabular-nums">
+              {pesos(linea.monto)}
+            </p>
           </li>
         ))}
       </ul>
       {(cotizacion.en_cortesia || cotizacion.tope_aplicado || cotizacion.minimo_aplicado) && (
-        <footer className="flex flex-wrap gap-2 px-4 py-3">
+        <footer className="flex flex-wrap gap-2 border-t-2 border-outline px-4 py-3">
           {cotizacion.en_cortesia && <Etiqueta texto="Cortesía" />}
           {cotizacion.tope_aplicado && <Etiqueta texto="Tope diario" />}
           {cotizacion.minimo_aplicado && <Etiqueta texto="Cobro mínimo" />}
@@ -380,8 +421,8 @@ function Desglose({ cotizacion }: { cotizacion: Cotizacion }) {
 
 function Etiqueta({ texto }: { texto: string }) {
   return (
-    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800
-                     dark:bg-amber-950 dark:text-amber-300">
+    <span className="rounded-zp border-2 border-warning px-2.5 py-0.5 text-zp-caption
+                     font-bold uppercase tracking-wide">
       {texto}
     </span>
   );
