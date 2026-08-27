@@ -6,6 +6,7 @@ abierto hace días tiene que poder señalar con qué versión se le cotizó.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC
 from zoneinfo import ZoneInfo
 
@@ -40,6 +41,33 @@ async def _plan_o_404(session: AsyncSession, plan_id: uuid.UUID) -> RatePlan:
     if plan is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No existe ese plan tarifario")
     return plan
+
+
+async def _validar_reglas(
+    session: AsyncSession, reglas: Sequence[ReglaIn]
+) -> None:
+    """Comprueba que los tipos existan y que no haya códigos repetidos."""
+    tipos_validos = set((await session.scalars(select(VehicleType.id))).all())
+    vistos: set[str] = set()
+    for regla in reglas:
+        if regla.vehicle_type_id not in tipos_validos:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"El tipo de vehículo {regla.vehicle_type_id} no existe en este parqueadero",
+            )
+        if regla.codigo in vistos:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"El código de regla '{regla.codigo}' está repetido"
+            )
+        vistos.add(regla.codigo)
+
+
+def _solo_borrador(plan: RatePlan) -> None:
+    if plan.estado is not EstadoPlan.BORRADOR:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Un plan activo o archivado no se edita: crea una versión nueva",
+        )
 
 
 def _fila_de_regla(tenant_id: uuid.UUID, plan_id: uuid.UUID, datos: ReglaIn) -> RateRule:
@@ -151,21 +179,8 @@ async def crear_plan(
     session.add(plan)
     await session.flush()
 
-    tipos_validos = set(
-        (await session.scalars(select(VehicleType.id))).all()
-    )
-    codigos = set()
+    await _validar_reglas(session, datos.reglas)
     for regla in datos.reglas:
-        if regla.vehicle_type_id not in tipos_validos:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"El tipo de vehículo {regla.vehicle_type_id} no existe en este parqueadero",
-            )
-        if regla.codigo in codigos:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"El código de regla '{regla.codigo}' está repetido"
-            )
-        codigos.add(regla.codigo)
         session.add(_fila_de_regla(tenant.id, plan.id, regla))
 
     await session.flush()
@@ -193,11 +208,7 @@ async def agregar_regla(
     _: None = Depends(requiere("rate:manage")),
 ) -> RatePlan:
     plan = await _plan_o_404(session, plan_id)
-    if plan.estado is not EstadoPlan.BORRADOR:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Un plan activo o archivado no se edita: crea una versión nueva",
-        )
+    _solo_borrador(plan)
     if await session.scalar(
         select(RateRule).where(RateRule.rate_plan_id == plan.id, RateRule.codigo == datos.codigo)
     ):
@@ -207,6 +218,61 @@ async def agregar_regla(
     await session.flush()
     await session.refresh(plan)
     return plan
+
+
+@router.put("/{plan_id}/reglas", response_model=PlanDetalleOut)
+async def reemplazar_reglas(
+    plan_id: uuid.UUID,
+    reglas: list[ReglaIn],
+    tenant: TenantDep,
+    session: SesionDep,
+    _: None = Depends(requiere("rate:manage")),
+) -> RatePlan:
+    """Sustituye por completo las tarifas de un borrador.
+
+    Es un reemplazo, no una fusión: lo que no venga en la lista se borra.
+    La pantalla de tarifas trabaja así porque un plan es un conjunto
+    coherente, no una colección de reglas sueltas que se parchean.
+    """
+    plan = await _plan_o_404(session, plan_id)
+    _solo_borrador(plan)
+    await _validar_reglas(session, reglas)
+
+    for vieja in list(plan.reglas):
+        await session.delete(vieja)
+    await session.flush()
+
+    for regla in reglas:
+        session.add(_fila_de_regla(tenant.id, plan.id, regla))
+    await session.flush()
+    await session.refresh(plan)
+    return plan
+
+
+@router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def descartar_borrador(
+    plan_id: uuid.UUID,
+    tenant: TenantDep,
+    session: SesionDep,
+    identidad: IdentidadDep,
+    request: Request,
+    _: None = Depends(requiere("rate:manage")),
+) -> None:
+    """Descarta un borrador. Los planes activos y archivados no se borran:
+    son la historia con la que se cotizaron los tickets."""
+    plan = await _plan_o_404(session, plan_id)
+    if plan.estado is not EstadoPlan.BORRADOR:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Solo se descartan borradores; los planes publicados son historia",
+        )
+
+    await audit.registrar(
+        session, accion="plan_tarifario.discard", entidad="rate_plan",
+        entidad_id=plan.id, tenant_id=tenant.id, actor_user_id=identidad.user_id,
+        antes={"codigo": plan.codigo, "version": plan.version}, request=request,
+    )
+    await session.delete(plan)
 
 
 @router.post("/{plan_id}/activar", response_model=PlanOut)

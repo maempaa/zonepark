@@ -149,6 +149,9 @@ class ReglaOut(BaseModel):
     gracia_minutos: int
     cobro_minimo: Decimal | None
     tope_diario: Decimal | None
+    # Estos dos faltaban en la salida. Sin ellos, duplicar un plan desde la
+    # interfaz los borraba en silencio.
+    tarifa_ticket_perdido: Decimal | None
     redondeo_modo: ModoRedondeo
     redondeo_paso: int
     impuesto_modo: ModoImpuesto
@@ -157,6 +160,7 @@ class ReglaOut(BaseModel):
     franja_dias: list[int] | None
     franja_desde: time | None
     franja_hasta: time | None
+    franja_incluye_festivos: bool
     franja_solo_festivos: bool
     prioridad: int
     escalones: list[EscalonOut]

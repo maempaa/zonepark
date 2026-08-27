@@ -319,3 +319,165 @@ async def test_activar_un_plan_queda_en_la_bitacora(dos_tenants, client):
         )
     assert "plan_tarifario.create" in acciones
     assert "plan_tarifario.activate" in acciones
+
+
+# ── Edición de un borrador ───────────────────────────────────────────────
+
+async def _duplicar(client, t, cab):
+    """Copia el plan vigente a un borrador, como hace la pantalla."""
+    planes = (await client.get(f"/api/v1/t/{t.slug}/planes", headers=cab)).json()
+    activo = next(p for p in planes if p["estado"] == "activo")
+    detalle = (await client.get(
+        f"/api/v1/t/{t.slug}/planes/{activo['id']}", headers=cab
+    )).json()
+
+    reglas = [
+        {
+            "codigo": r["codigo"],
+            "vehicle_type_id": r["vehicle_type_id"],
+            "modo": r["modo"],
+            "precio_minuto": r["precio_minuto"],
+            "precio_bloque": r["precio_bloque"],
+            "precio_plena": r["precio_plena"],
+            "precio_dia": r["precio_dia"],
+            "bloque_minutos": r["bloque_minutos"],
+            "dia_horas": r["dia_horas"],
+            "gracia_minutos": r["gracia_minutos"],
+            "cobro_minimo": r["cobro_minimo"],
+            "tope_diario": r["tope_diario"],
+            "tarifa_ticket_perdido": r["tarifa_ticket_perdido"],
+            "redondeo_modo": r["redondeo_modo"],
+            "redondeo_paso": r["redondeo_paso"],
+            "impuesto_modo": r["impuesto_modo"],
+            "impuesto_tasa": r["impuesto_tasa"],
+            "prioridad": r["prioridad"],
+            "escalones": r["escalones"],
+            "franja": None if not r["tiene_franja"] else {
+                "dias": r["franja_dias"],
+                "desde_hora": r["franja_desde"],
+                "hasta_hora": r["franja_hasta"],
+                "incluye_festivos": r["franja_incluye_festivos"],
+                "solo_festivos": r["franja_solo_festivos"],
+            },
+        }
+        for r in detalle["reglas"]
+    ]
+    creado = await client.post(
+        f"/api/v1/t/{t.slug}/planes", headers=cab,
+        json={"codigo": detalle["codigo"], "nombre": "Copia", "reglas": reglas},
+    )
+    return detalle, creado
+
+
+async def test_la_salida_trae_todo_lo_necesario_para_duplicar(dos_tenants, client):
+    """Sin franja_incluye_festivos ni la tarifa de ticket perdido, copiar un
+    plan desde la interfaz los borraría en silencio."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    planes = (await client.get(f"/api/v1/t/{a.slug}/planes", headers=cab)).json()
+    detalle = (await client.get(
+        f"/api/v1/t/{a.slug}/planes/{planes[0]['id']}", headers=cab
+    )).json()
+
+    campos = detalle["reglas"][0].keys()
+    assert "franja_incluye_festivos" in campos
+    assert "tarifa_ticket_perdido" in campos
+
+
+async def test_duplicar_un_plan_conserva_franjas_y_escalones(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    original, creado = await _duplicar(client, a, cab)
+    assert creado.status_code == 201
+    copia = creado.json()
+
+    def resumen(plan):
+        return sorted(
+            (
+                r["codigo"], r["modo"], str(r["precio_bloque"]), r["bloque_minutos"],
+                r["tiene_franja"], str(r["franja_desde"]), str(r["franja_hasta"]),
+                r["franja_incluye_festivos"], r["prioridad"],
+            )
+            for r in plan["reglas"]
+        )
+
+    assert resumen(copia) == resumen(original)
+    assert copia["version"] == original["version"] + 1
+    assert copia["estado"] == "borrador"
+
+
+async def test_reemplazar_las_reglas_de_un_borrador(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    r = await client.put(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/reglas",
+        headers=cab,
+        json=[{
+            "codigo": "carro-unico", "vehicle_type_id": str(a.tipos["carro"]),
+            "modo": "por_bloque", "precio_bloque": "5000", "bloque_minutos": 60,
+        }],
+    )
+    assert r.status_code == 200
+    # Es un reemplazo: las reglas anteriores desaparecen.
+    assert [x["codigo"] for x in r.json()["reglas"]] == ["carro-unico"]
+
+    simulacion = await client.post(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/simular",
+        headers=cab,
+        json={"vehicle_type_id": str(a.tipos["carro"]),
+              "entrada": "2026-08-24T13:00:00Z", "salida": "2026-08-24T14:00:00Z"},
+    )
+    assert Decimal(simulacion.json()["total"]) == Decimal("5000.00")
+
+
+async def test_no_se_reemplazan_las_reglas_de_un_plan_activo(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    planes = (await client.get(f"/api/v1/t/{a.slug}/planes", headers=cab)).json()
+    activo = next(p for p in planes if p["estado"] == "activo")
+
+    r = await client.put(
+        f"/api/v1/t/{a.slug}/planes/{activo['id']}/reglas",
+        headers=cab,
+        json=[{"codigo": "x", "vehicle_type_id": str(a.tipos["carro"]),
+               "modo": "por_bloque", "precio_bloque": "1"}],
+    )
+    assert r.status_code == 409
+
+
+async def test_descartar_un_borrador(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    r = await client.delete(f"/api/v1/t/{a.slug}/planes/{borrador['id']}", headers=cab)
+    assert r.status_code == 204
+
+    ausente = await client.get(f"/api/v1/t/{a.slug}/planes/{borrador['id']}", headers=cab)
+    assert ausente.status_code == 404
+
+
+async def test_un_plan_publicado_no_se_borra(dos_tenants, client):
+    """Es la historia con la que se cotizaron los tickets."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    planes = (await client.get(f"/api/v1/t/{a.slug}/planes", headers=cab)).json()
+    activo = next(p for p in planes if p["estado"] == "activo")
+
+    r = await client.delete(f"/api/v1/t/{a.slug}/planes/{activo['id']}", headers=cab)
+    assert r.status_code == 409
+
+
+async def test_al_operario_le_falta_permiso_para_editar_tarifas(dos_tenants, client):
+    a, _ = dos_tenants
+    planes = (await client.get(
+        f"/api/v1/t/{a.slug}/planes", headers=await _admin(client, a)
+    )).json()
+    r = await client.delete(
+        f"/api/v1/t/{a.slug}/planes/{planes[0]['id']}", headers=await _operario(client, a)
+    )
+    assert r.status_code == 403
