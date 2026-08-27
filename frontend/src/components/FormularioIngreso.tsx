@@ -7,6 +7,10 @@ import { useEffect, useState } from 'react';
  * seis dígitos las siguientes, sobre teclado numérico grande. En la
  * caseta se entra con una mano y a veces con guantes, así que el modo PIN
  * es el que se ofrece por defecto cuando el dispositivo ya se conoce.
+ *
+ * Estilo: sistema de alto contraste de ZonePark. Bordes negros de 2px en
+ * vez de sombras, porque una sombra suave desaparece con el reflejo del
+ * sol y un borde no.
  */
 
 const LLAVE_DISPOSITIVO = 'zp_device';
@@ -24,6 +28,38 @@ function obtenerHuella(): string {
     // Navegación privada o almacenamiento bloqueado: se entra con contraseña.
     return '';
   }
+}
+
+const CAMPO =
+  'w-full rounded-zp border-2 border-outline bg-surface-container-lowest px-4 py-3 ' +
+  'text-zp-lg text-on-surface placeholder:text-outline-variant';
+
+const BOTON_PRIMARIO =
+  'w-full rounded-zp border-2 border-outline bg-primary px-4 py-4 text-zp-lg ' +
+  'font-extrabold uppercase tracking-wide text-on-primary transition ' +
+  'active:bg-primary-container disabled:border-outline-variant ' +
+  'disabled:bg-surface-container-high disabled:text-on-surface-variant';
+
+const BOTON_SECUNDARIO =
+  'w-full rounded-zp border-2 border-outline bg-surface-container-lowest px-4 py-4 ' +
+  'text-zp-body font-bold text-on-surface transition active:bg-surface-container';
+
+function IconoError() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="h-6 w-6 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v6" />
+      <path d="M12 16.5v.01" />
+    </svg>
+  );
 }
 
 interface Props {
@@ -103,9 +139,9 @@ export default function FormularioIngreso({ tenant }: Props) {
   const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
   return (
-    <form onSubmit={enviar} className="space-y-5">
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+    <form onSubmit={enviar} className="space-y-4">
+      <label className="block space-y-2">
+        <span className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
           Correo
         </span>
         <input
@@ -115,16 +151,13 @@ export default function FormularioIngreso({ tenant }: Props) {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base
-                     text-slate-900 outline-none focus:border-brand-500 focus:ring-2
-                     focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900
-                     dark:text-slate-100"
+          className={CAMPO}
         />
       </label>
 
       {modo === 'password' ? (
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+        <label className="block space-y-2">
+          <span className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
             Contraseña
           </span>
           <input
@@ -133,28 +166,31 @@ export default function FormularioIngreso({ tenant }: Props) {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base
-                       text-slate-900 outline-none focus:border-brand-500 focus:ring-2
-                       focus:ring-brand-500/30 dark:border-slate-700 dark:bg-slate-900
-                       dark:text-slate-100"
+            className={CAMPO}
           />
         </label>
       ) : (
         <div className="space-y-4">
-          <div className="flex justify-center gap-2.5" aria-label="PIN de seis dígitos">
+          <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+            PIN
+          </p>
+
+          <div
+            className="flex justify-center gap-3"
+            role="status"
+            aria-label={`${pin.length} de 6 dígitos`}
+          >
             {Array.from({ length: 6 }, (_, i) => (
               <span
                 key={i}
-                className={`h-4 w-4 rounded-full transition ${
-                  i < pin.length
-                    ? 'bg-brand-600'
-                    : 'bg-slate-300 dark:bg-slate-700'
+                className={`h-5 w-5 rounded-full border-2 border-outline transition ${
+                  i < pin.length ? 'bg-secondary' : 'bg-surface-container-lowest'
                 }`}
               />
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-3">
             {teclas.map((tecla, i) =>
               tecla === '' ? (
                 <span key={i} />
@@ -163,14 +199,15 @@ export default function FormularioIngreso({ tenant }: Props) {
                   key={i}
                   type="button"
                   disabled={enviando}
+                  aria-label={tecla === '⌫' ? 'Borrar' : tecla}
                   onClick={() =>
                     setPin((actual) =>
                       tecla === '⌫' ? actual.slice(0, -1) : (actual + tecla).slice(0, 6),
                     )
                   }
-                  className="rounded-xl bg-white py-4 text-2xl font-semibold text-slate-900
-                             shadow-sm active:bg-slate-100 disabled:opacity-50
-                             dark:bg-slate-900 dark:text-slate-100 dark:active:bg-slate-800"
+                  className="rounded-zp border-2 border-outline bg-surface-container-lowest
+                             py-4 text-zp-xl font-extrabold text-on-surface transition
+                             active:bg-primary disabled:opacity-40"
                 >
                   {tecla}
                 </button>
@@ -183,22 +220,22 @@ export default function FormularioIngreso({ tenant }: Props) {
       {error && (
         <p
           role="alert"
-          className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800
-                     dark:bg-red-950 dark:text-red-200"
+          className="flex items-start gap-3 rounded-zp border-2 border-error bg-surface-container-lowest
+                     px-4 py-3 text-zp-body font-semibold text-error"
         >
-          {error}
+          <IconoError />
+          <span>{error}</span>
         </p>
       )}
 
       {modo === 'password' && (
-        <button
-          type="submit"
-          disabled={enviando}
-          className="w-full rounded-xl bg-brand-600 px-4 py-4 text-lg font-semibold text-white
-                     transition active:bg-brand-700 disabled:bg-slate-400"
-        >
+        <button type="submit" disabled={enviando} className={BOTON_PRIMARIO}>
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
+      )}
+
+      {modo === 'pin' && enviando && (
+        <p className="text-center text-zp-body font-bold text-on-surface-variant">Entrando…</p>
       )}
 
       <button
@@ -209,8 +246,7 @@ export default function FormularioIngreso({ tenant }: Props) {
           setPin('');
           setPassword('');
         }}
-        className="w-full text-sm font-medium text-brand-600 underline-offset-4 hover:underline
-                   dark:text-brand-500"
+        className={BOTON_SECUNDARIO}
       >
         {modo === 'pin' ? 'Entrar con contraseña' : 'Entrar con PIN'}
       </button>

@@ -1,7 +1,69 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Sistema de diseño ZonePark
+
+   Alto contraste amarillo sobre negro, pensado para leerse en un celular
+   bajo el sol de mediodía. Bordes gruesos y sin sombras: una sombra suave
+   desaparece con reflejo, un borde negro de 2px no.
+
+   Los nombres de los tokens son los del sistema, tal cual, para que la
+   traducción entre el diseño y el código sea uno a uno.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 @theme {
-  --color-brand-50:  #eef6ff;
+  /* Superficies */
+  --color-surface: #f9f9f9;
+  --color-surface-dim: #dadada;
+  --color-surface-bright: #f9f9f9;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f3f3;
+  --color-surface-container: #eeeeee;
+  --color-surface-container-high: #e2e2e2;
+  --color-surface-container-highest: #d6d6d6;
+
+  /* Contenido y trazos */
+  --color-on-surface: #000000;
+  --color-on-surface-variant: #444444;
+  --color-outline: #000000;
+  --color-outline-variant: #888888;
+
+  /* Acción */
+  --color-primary: #ffd700;
+  --color-on-primary: #000000;
+  --color-primary-container: #fff4a3;
+  --color-on-primary-container: #222200;
+  --color-secondary: #000000;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #333333;
+  --color-on-secondary-container: #ffffff;
+  --color-tertiary: #ffd700;
+  --color-on-tertiary: #000000;
+
+  /* Estados */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-success: #2e7d32;
+  --color-on-success: #ffffff;
+  --color-warning: #fbc02d;
+  --color-on-warning: #000000;
+
+  /* Forma: ROUND_EIGHT */
+  --radius-zp: 8px;
+
+  /* Tipografía. Escala 1.25 desde 16px. */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', sans-serif;
+  --font-placa: 'Inter', ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, monospace;
+  --text-zp-caption: 0.8rem;
+  --text-zp-body: 1rem;
+  --text-zp-lg: 1.25rem;
+  --text-zp-xl: 1.5625rem;
+  --text-zp-2xl: 1.9531rem;
+  --text-zp-3xl: 2.4414rem;
+
+  /* Paleta anterior, todavía en uso por las pantallas no migradas. */
+  --color-brand-50: #eef6ff;
   --color-brand-500: #2563eb;
   --color-brand-600: #1d4ed8;
   --color-brand-700: #1e40af;
@@ -26,4 +88,51 @@ body {
 /* Nada interactivo por debajo de 48px de alto. */
 button, a[role="button"], input, select {
   min-height: 48px;
+}
+
+/* ── Tema de operación ──────────────────────────────────────────────────
+   Se aplica por pantalla, no globalmente, mientras se migra el resto.
+   Aquí no hay modo oscuro a propósito: el contraste alto es el objetivo,
+   y un fondo oscuro bajo el sol se convierte en un espejo.               */
+
+.tema-operacion {
+  color-scheme: light;
+}
+
+/* El sistema pide 56px para operar con una sola mano y con guantes. */
+.tema-operacion button,
+.tema-operacion a[role="button"],
+.tema-operacion input,
+.tema-operacion select {
+  min-height: 56px;
+}
+
+/* El foco tiene que verse sin depender del color: dos anillos, uno claro
+   y otro oscuro, para que se distinga sobre cualquier fondo. */
+.tema-operacion :focus-visible {
+  outline: 3px solid var(--color-on-surface);
+  outline-offset: 2px;
+}
+
+/* ── Placa colombiana ───────────────────────────────────────────────────
+   Fondo blanco, borde negro grueso y tipografía de alto impacto. Es el
+   dato que el operario compara contra el vehículo que tiene delante, así
+   que se lee antes que cualquier otra cosa de la pantalla.
+
+   Se usa en las pantallas de ingreso y salida; el login no muestra
+   placas, así que ahí no aparece.                                        */
+
+.placa {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  border: 3px solid var(--color-outline);
+  border-radius: var(--radius-zp);
+  font-family: var(--font-placa);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  padding: 0.25rem 0.75rem;
+  text-transform: uppercase;
 }

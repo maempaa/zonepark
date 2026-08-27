@@ -12,23 +12,36 @@ if (sesion && sesion.tenant === tenant) {
   return Astro.redirect(`/t/${tenant}`);
 }
 
-// Se consulta la API solo para saber si el parqueadero existe y cómo se llama.
+// Se consulta la API solo para saber si el parqueadero existe.
 const meta = await apiGet<{ detail?: string }>(`/api/v1/t/${tenant}/sedes`);
 const existe = meta.ok || meta.status === 401 || meta.status === 403;
 if (!existe && meta.status === 404) {
   return new Response(null, { status: 404, statusText: 'Parqueadero no encontrado' });
 }
 ---
-<Base titulo="Ingreso">
+<Base titulo="Ingreso" tema="operacion">
   <main class="flex flex-1 flex-col justify-center px-6 py-10">
-    <header class="mb-8 text-center">
-      <p class="text-sm font-medium uppercase tracking-widest text-brand-600">ZonePark</p>
-      <h1 class="mt-1 text-2xl font-bold">{tenant}</h1>
-      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+    <header class="mb-8">
+      <!-- El bloque amarillo con borde negro es la marca: lo primero que se
+           distingue en una pantalla a contraluz. -->
+      <p
+        class="inline-block rounded-zp border-2 border-outline bg-primary px-3 py-1.5
+               text-zp-caption font-extrabold uppercase tracking-[0.2em] text-on-primary"
+      >
+        ZonePark
+      </p>
+      <h1 class="mt-4 text-zp-2xl font-extrabold leading-tight">{tenant}</h1>
+      <p class="mt-1 text-zp-body text-on-surface-variant">
         Ingresa para empezar tu turno
       </p>
     </header>
 
     <FormularioIngreso tenant={tenant!} client:load />
   </main>
+
+  <footer class="px-6 pb-8">
+    <p class="text-zp-caption text-on-surface-variant">
+      ¿Problemas para entrar? Pídele a tu supervisor que revise tu usuario.
+    </p>
+  </footer>
 </Base>

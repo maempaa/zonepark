@@ -5,18 +5,42 @@ interface Props {
   titulo: string;
   /** Las pantallas de configuración se usan en tablet o escritorio. */
   ancho?: boolean;
+  /**
+   * `operacion` aplica el sistema de diseño de alto contraste
+   * (amarillo sobre negro, sin modo oscuro). Se va activando pantalla a
+   * pantalla mientras se migra el resto de la aplicación.
+   */
+  tema?: 'app' | 'operacion';
 }
-const { titulo, ancho = false } = Astro.props;
+const { titulo, ancho = false, tema = 'app' } = Astro.props;
+
+const esOperacion = tema === 'operacion';
+const cuerpo = esOperacion
+  ? 'min-h-dvh bg-surface font-sans text-on-surface antialiased'
+  : 'min-h-dvh bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100';
 ---
-<html lang="es">
+<html lang="es" class={esOperacion ? 'tema-operacion' : undefined}>
   <head>
     <meta charset="utf-8" />
     <!-- viewport-fit=cover: respeta el notch; sin maximum-scale para no romper el zoom accesible -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1d4ed8" />
+    <meta name="theme-color" content={esOperacion ? '#ffd700' : '#1d4ed8'} />
     <title>{titulo} · ZonePark</title>
+
+    {esOperacion && (
+      <>
+        {/* Inter con `swap`: si la fuente tarda o no llega, el texto se pinta
+            igual con la pila del sistema en vez de quedarse invisible. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        />
+      </>
+    )}
   </head>
-  <body class="min-h-dvh bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+  <body class={cuerpo}>
     <div class:list={["mx-auto flex min-h-dvh w-full flex-col", ancho ? "max-w-3xl" : "max-w-md"]}>
       <slot />
     </div>
