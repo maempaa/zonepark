@@ -22,8 +22,10 @@ if (!existe && meta.status === 404) {
 ---
 <Base titulo="Ingreso" tema="operacion">
   <main class="flex flex-1 flex-col justify-center px-6 py-10">
-    <header class="mb-8">
-      <Logo alto={52} />
+    <header class="mb-8 text-center">
+      <!-- mx-auto además de text-center: la imagen es un bloque con ancho
+           fijo, así que el centrado del texto no la mueve por sí solo. -->
+      <Logo alto={52} class="mx-auto" />
       <h1 class="mt-6 text-zp-2xl font-extrabold leading-tight">{tenant}</h1>
       <p class="mt-1 text-zp-body text-on-surface-variant">
         Ingresa para empezar tu turno
