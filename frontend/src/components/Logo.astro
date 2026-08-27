@@ -1,0 +1,36 @@
+---
+/**
+ * Logotipo de ZonePark.
+ *
+ * El isotipo es un SVG en `public/`: escala sin perder filo, pesa unos
+ * cientos de bytes y sirve igual para el favicon. El texto es HTML con la
+ * tipografía de la página, no una imagen, para que se lea nítido en
+ * cualquier densidad de pantalla y crezca con el zoom accesible.
+ */
+interface Props {
+  /** Altura del isotipo en píxeles. */
+  alto?: number;
+  /** Sin la palabra, solo el pin. Para espacios estrechos. */
+  soloIsotipo?: boolean;
+  class?: string;
+}
+const { alto = 40, soloIsotipo = false, class: clase } = Astro.props;
+---
+<span class:list={['inline-flex items-center gap-2.5', clase]}>
+  <img
+    src="/isotipo.svg"
+    alt={soloIsotipo ? 'ZonePark' : ''}
+    width={Math.round((alto * 96) / 128)}
+    height={alto}
+    style={`height:${alto}px;width:auto`}
+    decoding="async"
+  />
+  {!soloIsotipo && (
+    <span
+      class="font-extrabold leading-none tracking-tight text-on-surface"
+      style={`font-size:${Math.round(alto * 0.68)}px`}
+    >
+      ZonePark
+    </span>
+  )}
+</span>

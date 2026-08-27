@@ -1,6 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
 import FormularioIngreso from '../../../components/FormularioIngreso';
+import Logo from '../../../components/Logo.astro';
 import { apiGet } from '../../../lib/api';
 import { leerSesion } from '../../../lib/session';
 
@@ -22,15 +23,8 @@ if (!existe && meta.status === 404) {
 <Base titulo="Ingreso" tema="operacion">
   <main class="flex flex-1 flex-col justify-center px-6 py-10">
     <header class="mb-8">
-      <!-- El bloque amarillo con borde negro es la marca: lo primero que se
-           distingue en una pantalla a contraluz. -->
-      <p
-        class="inline-block rounded-zp border-2 border-outline bg-primary px-3 py-1.5
-               text-zp-caption font-extrabold uppercase tracking-[0.2em] text-on-primary"
-      >
-        ZonePark
-      </p>
-      <h1 class="mt-4 text-zp-2xl font-extrabold leading-tight">{tenant}</h1>
+      <Logo alto={44} />
+      <h1 class="mt-6 text-zp-2xl font-extrabold leading-tight">{tenant}</h1>
       <p class="mt-1 text-zp-body text-on-surface-variant">
         Ingresa para empezar tu turno
       </p>

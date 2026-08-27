@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 128" role="img" aria-label="ZonePark">
+  <!--
+    Isotipo de ZonePark: la P en amarillo y, en su contraforma, un pin de
+    mapa negro cuyo círculo hace de ojo de la letra. La punta del pin baja
+    por debajo de la base de la P: es lo que le da el gesto de "aquí".
+  -->
+  <path fill="#ffd700" d="M6 4h50a30 30 0 0 1 0 60H28v40H6z" />
+  <path fill="#000000" d="M42 119C42 119 24 84 24 53a18 18 0 1 1 36 0c0 31-18 66-18 66z" />
+  <circle fill="#ffffff" cx="42" cy="53" r="7" />
+</svg>
