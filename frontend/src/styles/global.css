@@ -61,6 +61,7 @@
   --text-zp-xl: 1.5625rem;
   --text-zp-2xl: 1.9531rem;
   --text-zp-3xl: 2.4414rem;
+  --text-zp-4xl: 3.0518rem;
 
   /* Paleta anterior, todavía en uso por las pantallas no migradas. */
   --color-brand-50: #eef6ff;

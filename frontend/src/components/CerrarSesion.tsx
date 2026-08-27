@@ -13,9 +13,9 @@ export default function CerrarSesion({ tenant }: { tenant: string }) {
     <button
       onClick={salir}
       disabled={saliendo}
-      className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-slate-600
-                 active:bg-slate-200 disabled:opacity-50 dark:text-slate-300
-                 dark:active:bg-slate-800"
+      className="shrink-0 rounded-zp border-2 border-outline bg-surface-container-lowest px-4
+                 text-zp-caption font-bold uppercase tracking-wide text-on-surface
+                 transition active:bg-surface-container disabled:opacity-50"
     >
       {saliendo ? 'Saliendo…' : 'Salir'}
     </button>

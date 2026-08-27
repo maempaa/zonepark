@@ -1,0 +1,29 @@
+---
+/**
+ * Placa del vehículo.
+ *
+ * Fondo blanco y borde negro grueso, como una placa real. Es el dato que
+ * el operario compara contra el carro que tiene delante, así que tiene que
+ * leerse antes que cualquier otra cosa de la pantalla.
+ */
+interface Props {
+  placa: string | null;
+  /** Código del ticket, para los tipos que no llevan placa. */
+  codigo?: string;
+  class?: string;
+}
+const { placa, codigo, class: clase } = Astro.props;
+---
+{placa ? (
+  <span class:list={['placa', clase]}>{placa}</span>
+) : (
+  <span
+    class:list={[
+      'inline-flex items-center rounded-zp border-2 border-dashed border-outline-variant',
+      'px-3 py-1 font-semibold text-on-surface-variant',
+      clase,
+    ]}
+  >
+    {codigo ?? 'Sin placa'}
+  </span>
+)}
