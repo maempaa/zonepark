@@ -1,5 +1,6 @@
 ---
 import Base from '../../../layouts/Base.astro';
+import CabeceraPantalla from '../../../components/CabeceraPantalla.astro';
 import TablaConceptos from '../../../components/TablaConceptos.astro';
 import { llamarApi } from '../../../lib/api';
 
@@ -36,37 +37,35 @@ const descuadresRes = puedeVerCaja
   : null;
 const descuadres = descuadresRes?.ok ? await descuadresRes.json() : [];
 
-const money = (valor: string | number) =>
+const money = (v: string | number) =>
   new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(Number(valor));
+    style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+  }).format(Number(v));
 
 // La barra más alta marca la escala del resto.
 const maximo = ingresos?.por_dia?.length
   ? Math.max(...ingresos.por_dia.map((f: any) => Number(f.total)))
   : 0;
+
+const CAMPO_FECHA =
+  'mt-1 block rounded-zp border-2 border-outline bg-surface-container-lowest px-3 py-2 ' +
+  'text-zp-body font-semibold';
 ---
 <Base titulo="Reportes" ancho>
-  <header class="px-5 pt-8 pb-5">
-    <a href={`/t/${tenant}`} class="text-sm font-medium text-brand-600 dark:text-brand-500">
-      ← Tablero
-    </a>
-    <h1 class="mt-2 text-xl font-bold">Reportes</h1>
-  </header>
+  <CabeceraPantalla titulo="Reportes" volverA={`/t/${tenant}`} etiquetaVolver="Volver al tablero" />
 
-  <main class="flex-1 space-y-8 px-5 pb-12">
-    <section class="rounded-2xl bg-white p-5 text-center shadow-sm dark:bg-slate-900">
-      <p class="text-5xl font-bold tabular-nums">{ocupacion.total}</p>
-      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+  <main class="flex-1 space-y-8 px-6 py-6">
+    <section class="rounded-zp border-2 border-outline bg-surface-container-lowest p-6
+                    text-center">
+      <p class="text-zp-4xl font-extrabold leading-none tabular-nums">{ocupacion.total}</p>
+      <p class="mt-2 text-zp-body text-on-surface-variant">
         {ocupacion.total === 1 ? 'vehículo adentro ahora' : 'vehículos adentro ahora'}
       </p>
       {ocupacion.filas.length > 0 && (
         <ul class="mt-4 flex flex-wrap justify-center gap-2">
           {ocupacion.filas.map((f: any) => (
-            <li class="rounded-lg bg-slate-100 px-3 py-1.5 text-sm dark:bg-slate-800">
-              {f.tipo}: <strong class="tabular-nums">{f.adentro}</strong>
+            <li class="rounded-zp border-2 border-outline px-3 py-1.5 text-zp-caption font-bold">
+              {f.tipo}: <span class="tabular-nums">{f.adentro}</span>
             </li>
           ))}
         </ul>
@@ -74,28 +73,22 @@ const maximo = ingresos?.por_dia?.length
     </section>
 
     <section class="space-y-4">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Ingresos</h2>
-        <form method="GET" class="flex flex-wrap items-end gap-2">
-          <label class="text-xs text-slate-500">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <h2 class="text-zp-lg font-extrabold">Ingresos</h2>
+        <form method="GET" class="flex flex-wrap items-end gap-3">
+          <label class="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
             Desde
-            <input
-              type="date" name="desde" value={desde}
-              class="mt-0.5 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm
-                     dark:border-slate-700 dark:bg-slate-900"
-            />
+            <input type="date" name="desde" value={desde} class={CAMPO_FECHA} />
           </label>
-          <label class="text-xs text-slate-500">
+          <label class="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
             Hasta
-            <input
-              type="date" name="hasta" value={hasta}
-              class="mt-0.5 block rounded-lg border border-slate-300 px-2 py-1.5 text-sm
-                     dark:border-slate-700 dark:bg-slate-900"
-            />
+            <input type="date" name="hasta" value={hasta} class={CAMPO_FECHA} />
           </label>
           <button
             type="submit"
-            class="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white"
+            class="rounded-zp border-2 border-outline bg-primary px-5 py-2.5 text-zp-body
+                   font-extrabold uppercase tracking-wide text-on-primary
+                   active:bg-primary-container"
           >
             Ver
           </button>
@@ -103,45 +96,52 @@ const maximo = ingresos?.por_dia?.length
       </div>
 
       {errorRango && (
-        <p class="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800
-                  dark:bg-red-950 dark:text-red-200">
-          {errorRango}
+        <p class="flex items-start gap-3 rounded-zp border-2 border-error
+                  bg-surface-container-lowest px-4 py-3 text-zp-body font-semibold text-error">
+          <svg viewBox="0 0 24 24" class="h-6 w-6 shrink-0" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M12 7v6" /><path d="M12 16.5v.01" />
+          </svg>
+          <span>{errorRango}</span>
         </p>
       )}
 
       {ingresos && (
         <>
-          <div class="flex flex-wrap items-baseline justify-between gap-3 rounded-2xl bg-white
-                      p-5 shadow-sm dark:bg-slate-900">
+          <div class="flex flex-wrap items-baseline justify-between gap-4 rounded-zp border-2
+                      border-outline bg-surface-container-lowest p-6">
             <div>
-              <p class="text-3xl font-bold tabular-nums">{money(ingresos.total)}</p>
-              <p class="text-sm text-slate-500 dark:text-slate-400">
+              <p class="text-zp-3xl font-extrabold leading-none tabular-nums">
+                {money(ingresos.total)}
+              </p>
+              <p class="mt-2 text-zp-body text-on-surface-variant">
                 {ingresos.tickets} tickets · {ingresos.desde} a {ingresos.hasta}
               </p>
             </div>
             <a
               href={`/api/v1/t/${tenant}/reportes/ingresos.csv${sufijo}`}
-              class="rounded-lg bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700
-                     dark:bg-slate-800 dark:text-slate-200"
+              class="rounded-zp border-2 border-outline px-4 py-3 text-zp-body font-bold
+                     active:bg-surface-container"
             >
               Descargar CSV
             </a>
           </div>
 
           {ingresos.por_dia.length > 0 && (
-            <div class="overflow-x-auto rounded-2xl bg-white p-5 shadow-sm dark:bg-slate-900">
-              <ul class="flex min-w-max items-end gap-1.5" style="height: 140px">
+            <div class="overflow-x-auto rounded-zp border-2 border-outline
+                        bg-surface-container-lowest p-5">
+              <ul class="flex min-w-max items-end gap-2" style="height: 150px">
                 {ingresos.por_dia.map((f: any) => (
-                  <li class="flex w-10 flex-col items-center justify-end gap-1">
-                    <span class="text-[10px] tabular-nums text-slate-500">
+                  <li class="flex w-12 flex-col items-center justify-end gap-1.5">
+                    <span class="text-zp-caption font-bold tabular-nums">
                       {Math.round(Number(f.total) / 1000)}k
                     </span>
                     <div
-                      class="w-full rounded-t bg-brand-500"
-                      style={`height: ${maximo ? Math.max(4, (Number(f.total) / maximo) * 100) : 4}px`}
+                      class="w-full rounded-t border-2 border-outline bg-primary"
+                      style={`height: ${maximo ? Math.max(6, (Number(f.total) / maximo) * 100) : 6}px`}
                       title={`${f.dia}: ${money(f.total)}`}
                     />
-                    <span class="text-[10px] text-slate-400">{f.dia.slice(8)}</span>
+                    <span class="text-zp-caption text-on-surface-variant">{f.dia.slice(8)}</span>
                   </li>
                 ))}
               </ul>
@@ -158,29 +158,22 @@ const maximo = ingresos?.por_dia?.length
 
     {puedeVerCaja && descuadres.length > 0 && (
       <section class="space-y-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Turnos que no cuadraron
-        </h2>
-        <ul class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
+        <h2 class="text-zp-lg font-extrabold">Turnos que no cuadraron</h2>
+        <ul class="overflow-hidden rounded-zp border-2 border-outline
+                   bg-surface-container-lowest">
           {descuadres.map((t: any) => (
-            <li class="flex items-baseline justify-between gap-3 border-b border-slate-100
-                       px-4 py-3 last:border-0 dark:border-slate-800">
+            <li class="flex items-baseline justify-between gap-3 border-b border-outline-variant
+                       px-4 py-3 last:border-0">
               <div class="min-w-0">
-                <p class="text-sm">
-                  {new Date(t.abierto_at).toLocaleDateString('es-CO')}
-                </p>
-                <p class="truncate text-xs text-slate-500">
+                <p class="text-zp-body">{new Date(t.abierto_at).toLocaleDateString('es-CO')}</p>
+                <p class="truncate text-zp-caption text-on-surface-variant">
                   esperado {money(t.esperado)} · contado {money(t.contado)}
                 </p>
               </div>
-              <p
-                class:list={[
-                  'shrink-0 font-semibold tabular-nums',
-                  Number(t.diferencia) < 0
-                    ? 'text-red-700 dark:text-red-400'
-                    : 'text-emerald-700 dark:text-emerald-400',
-                ]}
-              >
+              <p class:list={[
+                'shrink-0 text-zp-lg font-extrabold tabular-nums',
+                Number(t.diferencia) < 0 ? 'text-error' : 'text-success',
+              ]}>
                 {money(t.diferencia)}
               </p>
             </li>
@@ -190,4 +183,3 @@ const maximo = ingresos?.por_dia?.length
     )}
   </main>
 </Base>
-

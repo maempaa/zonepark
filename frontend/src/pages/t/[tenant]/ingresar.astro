@@ -1,6 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
 import RegistrarIngreso from '../../../components/RegistrarIngreso';
+import CabeceraPantalla from '../../../components/CabeceraPantalla.astro';
 import { llamarApi } from '../../../lib/api';
 
 const { tenant } = Astro.params;
@@ -23,21 +24,8 @@ const sedes = sedesRes?.ok ? await sedesRes.json() : [];
 const tipos = tiposRes?.ok ? await tiposRes.json() : [];
 const articulos = articulosRes?.ok ? await articulosRes.json() : [];
 ---
-<Base titulo="Nuevo ingreso" tema="operacion">
-  <header class="flex items-center gap-3 border-b-2 border-outline px-6 py-4">
-    <a
-      href={`/t/${tenant}`}
-      aria-label="Volver al tablero"
-      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-zp border-2
-             border-outline bg-surface-container-lowest active:bg-surface-container"
-    >
-      <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"
-           stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="m15 18-6-6 6-6" />
-      </svg>
-    </a>
-    <h1 class="text-zp-lg font-extrabold">Nuevo ingreso</h1>
-  </header>
+<Base titulo="Nuevo ingreso">
+  <CabeceraPantalla titulo="Nuevo ingreso" volverA={`/t/${tenant}`} etiquetaVolver="Volver al tablero" />
 
   <main class="flex-1 px-6 py-6">
     {sedes.length === 0 || tipos.length === 0 ? (

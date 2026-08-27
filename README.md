@@ -130,6 +130,26 @@ Los reportes (`/t/{slug}/reportes`) agregan en SQL y agrupan por la hora de
 la sede: un turno que termina a la 1 de la mañana pertenece al día anterior
 para quien lo trabajó. Hay export CSV.
 
+## Interfaz
+
+Toda la aplicación usa un solo sistema de diseño: amarillo y negro de alto
+contraste, pensado para leerse en un celular bajo el sol de mediodía.
+Bordes negros de 2px en vez de sombras —una sombra suave desaparece con el
+reflejo, un borde no—, radio de 8px y objetivos táctiles de 56px para
+operar con una mano y con guantes.
+
+Los tokens viven en [`global.css`](frontend/src/styles/global.css) con los
+nombres del sistema de diseño tal cual, para que la traducción con el
+código sea uno a uno.
+
+**Sin modo oscuro, a propósito**: el contraste alto es el objetivo, y un
+fondo oscuro bajo el sol se convierte en un espejo.
+
+La placa del vehículo tiene su propio tratamiento —fondo blanco, borde
+negro grueso, tipografía de alto impacto— y aparece en el ingreso, la
+búsqueda y el cobro. Es el dato que el operario compara contra el carro
+que tiene delante, así que se lee antes que nada.
+
 ## Cómo funciona el aislamiento entre clientes
 
 El tenant viaja en la ruta: `/t/central/...`. La resolución vive aislada en

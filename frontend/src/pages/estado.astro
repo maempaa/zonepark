@@ -5,7 +5,7 @@ import { apiGet } from '../lib/api';
 
 // Render en el servidor: Astro habla con FastAPI por la red interna.
 const salud = await apiGet<{ status: string; env: string; database: string }>('/health');
-const meta = await apiGet<{ app: string; version: string; tenant_mode: string }>('/api/v1/meta');
+const meta = await apiGet<{ app: string; version: string }>('/api/v1/meta');
 
 const filas = [
   { nombre: 'Astro (SSR)', ok: true, detalle: 'renderizando esta página' },
@@ -21,45 +21,46 @@ const filas = [
   },
 ];
 ---
-<Base titulo="Estado del sistema">
-  <header class="px-5 pt-8 pb-6">
-    <h1 class="text-2xl font-bold tracking-tight">ZonePark</h1>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-      Estado de los servicios
-      {meta.ok && <span> · v{meta.data.version}</span>}
+<Base titulo="Estado">
+  <header class="px-6 pt-8 pb-6">
+    <h1 class="text-zp-xl font-extrabold">Estado del sistema</h1>
+    <p class="mt-1 text-zp-body text-on-surface-variant">
+      {meta.ok ? `ZonePark v${meta.data.version}` : 'Sin respuesta de la API'}
     </p>
   </header>
 
-  <main class="flex-1 space-y-6 px-5 pb-10">
-    <section class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
-      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-        {filas.map((f) => (
-          <li class="flex items-center justify-between gap-3 px-4 py-4">
-            <div class="min-w-0">
-              <p class="font-medium">{f.nombre}</p>
-              <p class="truncate text-sm text-slate-500 dark:text-slate-400">{f.detalle}</p>
-            </div>
-            <span
-              class:list={[
-                'shrink-0 rounded-full px-3 py-1 text-xs font-semibold',
-                f.ok
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                  : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-              ]}
-            >
-              {f.ok ? 'OK' : 'FALLA'}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
+  <main class="flex-1 space-y-6 px-6 pb-10">
+    <ul class="overflow-hidden rounded-zp border-2 border-outline bg-surface-container-lowest">
+      {filas.map((f) => (
+        <li class="flex items-center justify-between gap-3 border-b border-outline-variant
+                   px-4 py-4 last:border-0">
+          <div class="min-w-0">
+            <p class="text-zp-body font-bold">{f.nombre}</p>
+            <p class="truncate text-zp-caption text-on-surface-variant">{f.detalle}</p>
+          </div>
+          <span
+            class:list={[
+              'flex shrink-0 items-center gap-1.5 rounded-zp border-2 px-3 py-1',
+              'text-zp-caption font-bold uppercase tracking-wide',
+              f.ok ? 'border-success text-success' : 'border-error text-error',
+            ]}
+          >
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"
+                 stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d={f.ok ? 'm4 12 6 6L20 6' : 'M6 6l12 12M18 6L6 18'} />
+            </svg>
+            {f.ok ? 'OK' : 'Falla'}
+          </span>
+        </li>
+      ))}
+    </ul>
 
     <section class="space-y-3">
-      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+      <h2 class="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
         Desde el navegador
       </h2>
       <PruebaConexion client:load />
-      <p class="text-xs text-slate-500 dark:text-slate-400">
+      <p class="text-zp-caption text-on-surface-variant">
         Este botón sale del navegador, pasa por el proxy de Astro y llega a FastAPI.
         Comprueba la cadena que usará el operario.
       </p>

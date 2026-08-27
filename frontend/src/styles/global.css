@@ -62,17 +62,12 @@
   --text-zp-2xl: 1.9531rem;
   --text-zp-3xl: 2.4414rem;
   --text-zp-4xl: 3.0518rem;
-
-  /* Paleta anterior, todavía en uso por las pantallas no migradas. */
-  --color-brand-50: #eef6ff;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
 }
 
-/* El operario trabaja de pie, con una mano y a veces bajo el sol. */
+/* Sin modo oscuro, a propósito: el contraste alto es el objetivo, y un
+   fondo oscuro bajo el sol se convierte en un espejo. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 html {
@@ -86,31 +81,15 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Nada interactivo por debajo de 48px de alto. */
+/* 56px de alto mínimo, como pide el sistema para operar con una sola mano
+   y con guantes. */
 button, a[role="button"], input, select {
-  min-height: 48px;
-}
-
-/* ── Tema de operación ──────────────────────────────────────────────────
-   Se aplica por pantalla, no globalmente, mientras se migra el resto.
-   Aquí no hay modo oscuro a propósito: el contraste alto es el objetivo,
-   y un fondo oscuro bajo el sol se convierte en un espejo.               */
-
-.tema-operacion {
-  color-scheme: light;
-}
-
-/* El sistema pide 56px para operar con una sola mano y con guantes. */
-.tema-operacion button,
-.tema-operacion a[role="button"],
-.tema-operacion input,
-.tema-operacion select {
   min-height: 56px;
 }
 
-/* El foco tiene que verse sin depender del color: dos anillos, uno claro
-   y otro oscuro, para que se distinga sobre cualquier fondo. */
-.tema-operacion :focus-visible {
+/* El foco se marca con un trazo grueso, no con un cambio de color: tiene
+   que distinguirse sobre el amarillo y sobre el blanco por igual. */
+:focus-visible {
   outline: 3px solid var(--color-on-surface);
   outline-offset: 2px;
 }

@@ -4,28 +4,29 @@ interface Props {
   filas: Array<{ concepto: string; tickets: number; total: string }>;
 }
 const { titulo, filas } = Astro.props;
-const money = (valor: string | number) =>
+const money = (v: string | number) =>
   new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    maximumFractionDigits: 0,
-  }).format(Number(valor));
+    style: 'currency', currency: 'COP', maximumFractionDigits: 0,
+  }).format(Number(v));
 ---
-<div class="overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-900">
-  <p class="border-b border-slate-100 px-4 py-3 text-sm font-medium dark:border-slate-800">
+<div class="overflow-hidden rounded-zp border-2 border-outline bg-surface-container-lowest">
+  <p class="border-b-2 border-outline px-4 py-3 text-zp-caption font-bold uppercase
+            tracking-wide text-on-surface-variant">
     {titulo}
   </p>
   {filas.length === 0 ? (
-    <p class="px-4 py-4 text-sm text-slate-500">Sin datos en el rango</p>
+    <p class="px-4 py-5 text-zp-body text-on-surface-variant">Sin datos en el rango</p>
   ) : (
     <ul>
       {filas.map((f) => (
-        <li class="flex items-baseline justify-between gap-3 border-b border-slate-100 px-4 py-2.5
-                   last:border-0 dark:border-slate-800">
-          <span class="truncate text-sm capitalize">{f.concepto}</span>
-          <span class="shrink-0 text-sm tabular-nums">
+        <li class="flex items-baseline justify-between gap-3 border-b border-outline-variant
+                   px-4 py-3 last:border-0">
+          <span class="truncate text-zp-body capitalize">{f.concepto}</span>
+          <span class="shrink-0 text-zp-body font-semibold tabular-nums">
             {money(f.total)}
-            <span class="ml-2 text-xs text-slate-400">({f.tickets})</span>
+            <span class="ml-2 text-zp-caption font-normal text-on-surface-variant">
+              ({f.tickets})
+            </span>
           </span>
         </li>
       ))}

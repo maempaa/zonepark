@@ -3,13 +3,12 @@ import { useState } from 'react';
 type Estado = 'inicial' | 'cargando' | 'ok' | 'error';
 
 /**
- * Isla de prueba de la fase 0: verifica desde el navegador la cadena
- * completa navegador → proxy de Astro → FastAPI.
- * Se reemplaza en la fase 3 por el formulario de ingreso.
+ * Verifica desde el navegador la cadena completa
+ * navegador → proxy de Astro → FastAPI.
  */
 export default function PruebaConexion() {
   const [estado, setEstado] = useState<Estado>('inicial');
-  const [detalle, setDetalle] = useState<string>('');
+  const [detalle, setDetalle] = useState('');
 
   async function probar() {
     setEstado('cargando');
@@ -25,30 +24,26 @@ export default function PruebaConexion() {
     }
   }
 
-  const colores: Record<Estado, string> = {
-    inicial: 'bg-brand-600 active:bg-brand-700',
-    cargando: 'bg-slate-400',
-    ok: 'bg-emerald-600 active:bg-emerald-700',
-    error: 'bg-red-600 active:bg-red-700',
-  };
+  const borde =
+    estado === 'ok' ? 'border-success text-success'
+    : estado === 'error' ? 'border-error text-error'
+    : 'border-outline';
 
   return (
     <div className="space-y-3">
       <button
         onClick={probar}
         disabled={estado === 'cargando'}
-        className={`w-full rounded-xl px-4 py-4 text-lg font-semibold text-white transition ${colores[estado]}`}
+        className="w-full rounded-zp border-2 border-outline bg-primary px-4 py-4 text-zp-body
+                   font-extrabold uppercase tracking-wide text-on-primary
+                   active:bg-primary-container disabled:border-outline-variant
+                   disabled:bg-surface-container-high disabled:text-on-surface-variant"
       >
         {estado === 'cargando' ? 'Probando…' : 'Probar conexión con la API'}
       </button>
       {detalle && (
-        <p
-          className={`rounded-lg px-3 py-2 text-sm ${
-            estado === 'ok'
-              ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-              : 'bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200'
-          }`}
-        >
+        <p className={`rounded-zp border-2 bg-surface-container-lowest px-4 py-3 text-zp-body
+                       font-semibold ${borde}`}>
           {detalle}
         </p>
       )}
