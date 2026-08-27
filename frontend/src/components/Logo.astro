@@ -2,35 +2,35 @@
 /**
  * Logotipo de ZonePark.
  *
- * El isotipo es un SVG en `public/`: escala sin perder filo, pesa unos
- * cientos de bytes y sirve igual para el favicon. El texto es HTML con la
- * tipografía de la página, no una imagen, para que se lea nítido en
- * cualquier densidad de pantalla y crezca con el zoom accesible.
+ * Por defecto va el logotipo completo —isotipo y palabra— desde el PNG de
+ * marca, recortado a su caja, con el blanco convertido en transparencia y
+ * a unas tres veces el tamaño al que se muestra, para que se vea nítido en
+ * pantallas de alta densidad sin cargar el original de 1024 px.
+ *
+ * `soloIsotipo` usa el SVG del pin: pesa 543 bytes y escala sin límite.
+ * Es el que conviene en barras y espacios estrechos, y el que hace de
+ * favicon.
  */
 interface Props {
-  /** Altura del isotipo en píxeles. */
+  /** Altura en píxeles. El ancho sale de la proporción. */
   alto?: number;
-  /** Sin la palabra, solo el pin. Para espacios estrechos. */
+  /** Solo el pin, sin la palabra. Para espacios estrechos. */
   soloIsotipo?: boolean;
   class?: string;
 }
-const { alto = 40, soloIsotipo = false, class: clase } = Astro.props;
+const { alto = 48, soloIsotipo = false, class: clase } = Astro.props;
+
+// Proporciones reales de cada archivo, para reservar el espacio exacto y
+// que la página no salte cuando la imagen termina de cargar.
+const proporcion = soloIsotipo ? 96 / 128 : 480 / 157;
+const ancho = Math.round(alto * proporcion);
 ---
-<span class:list={['inline-flex items-center gap-2.5', clase]}>
-  <img
-    src="/isotipo.svg"
-    alt={soloIsotipo ? 'ZonePark' : ''}
-    width={Math.round((alto * 96) / 128)}
-    height={alto}
-    style={`height:${alto}px;width:auto`}
-    decoding="async"
-  />
-  {!soloIsotipo && (
-    <span
-      class="font-extrabold leading-none tracking-tight text-on-surface"
-      style={`font-size:${Math.round(alto * 0.68)}px`}
-    >
-      ZonePark
-    </span>
-  )}
-</span>
+<img
+  src={soloIsotipo ? '/isotipo.svg' : '/logo.png'}
+  alt="ZonePark"
+  width={ancho}
+  height={alto}
+  class:list={['block h-auto', clase]}
+  style={`width:${ancho}px`}
+  decoding="async"
+/>
