@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import IdentidadDep, SesionDep, TenantDep, requiere
@@ -129,10 +130,40 @@ async def registrar_ingreso(
     except (SinPlanVigente, SinTarifaParaElVehiculo) as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
 
+    # Misma transacción que la apertura: si un artículo no existe, la
+    # excepción deshace también el ticket y no queda nada a medias.
+    if datos.items:
+        catalogo = {
+            a.codigo: a
+            for a in (
+                await session.scalars(
+                    select(ServiceItem).where(
+                        ServiceItem.codigo.in_([i.codigo for i in datos.items]),
+                        ServiceItem.activo.is_(True),
+                    )
+                )
+            ).all()
+        }
+        for pedido in datos.items:
+            articulo = catalogo.get(pedido.codigo)
+            if articulo is None:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, f"No existe el artículo '{pedido.codigo}'"
+                )
+            await agregar_item(
+                session, tenant=tenant, ticket=ticket, articulo=articulo,
+                cantidad=pedido.cantidad,
+            )
+
     await audit.registrar(
         session, accion="ticket.open", entidad="ticket", entidad_id=ticket.id,
         tenant_id=tenant.id, actor_user_id=identidad.user_id,
-        despues={"codigo": ticket.codigo, "placa": ticket.placa}, request=request,
+        despues={
+            "codigo": ticket.codigo,
+            "placa": ticket.placa,
+            "items": [i.codigo for i in datos.items],
+        },
+        request=request,
     )
     return _detalle(ticket)
 
@@ -177,8 +208,6 @@ async def añadir_item(
     identidad: IdentidadDep,
     _: None = Depends(requiere("ticket:create")),
 ) -> TicketDetalleOut:
-    from sqlalchemy import select
-
     ticket = await _ticket_o_404(session, ticket_id)
     _verificar_alcance(identidad, ticket.parking_lot_id)
 

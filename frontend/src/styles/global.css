@@ -123,6 +123,29 @@ button, a[role="button"], input, select {
    Se usa en las pantallas de ingreso y salida; el login no muestra
    placas, así que ahí no aparece.                                        */
 
+/* El campo donde se digita la placa se parece a una placa de verdad: es
+   lo que el operario está copiando del vehículo que tiene delante, y el
+   parecido reduce los errores de transcripción. */
+.placa-campo {
+  width: 100%;
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  border: 2px solid var(--color-outline);
+  border-radius: var(--radius-zp);
+  font-family: var(--font-placa);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0.75rem 0.5rem;
+}
+
+.placa-campo::placeholder {
+  color: var(--color-outline-variant);
+  letter-spacing: 0.16em;
+}
+
 .placa {
   display: inline-flex;
   align-items: center;

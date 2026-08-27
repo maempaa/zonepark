@@ -287,3 +287,53 @@ async def test_el_cobro_queda_en_la_bitacora(dos_tenants, client):
     async with tenant_scope(a.id) as session:
         acciones = set((await session.scalars(select(AuditLog.accion))).all())
     assert {"ticket.open", "ticket.checkout"} <= acciones
+
+
+# ── Artículos entregados en el ingreso ───────────────────────────────────
+
+async def test_el_ingreso_puede_llevar_articulos(dos_tenants, client):
+    """El casco que se guarda al recibir la moto se registra con el ticket."""
+    a, _ = dos_tenants
+    r = await _ingresar(
+        client, a, await _cab(client, a), tipo="moto", placa="MOT123",
+        items=[{"codigo": "casco"}],
+    )
+    assert r.status_code == 201
+    items = r.json()["items"]
+    assert [i["codigo"] for i in items] == ["casco"]
+    assert items[0]["cantidad"] == 1
+
+
+async def test_un_articulo_inexistente_no_deja_el_ticket_a_medias(dos_tenants, client):
+    """Si el artículo falla, el ticket tampoco se crea: todo o nada."""
+    a, _ = dos_tenants
+    cab = await _cab(client, a)
+
+    r = await _ingresar(client, a, cab, placa="XXX999", items=[{"codigo": "helicoptero"}])
+    assert r.status_code == 400
+    assert "helicoptero" in r.json()["detail"]
+
+    # Y no quedó ningún ticket suelto.
+    listado = await client.get(f"/api/v1/t/{a.slug}/tickets?placa=XXX999", headers=cab)
+    assert listado.json() == []
+
+
+async def test_el_ingreso_sin_articulos_sigue_funcionando(dos_tenants, client):
+    a, _ = dos_tenants
+    r = await _ingresar(client, a, await _cab(client, a))
+    assert r.status_code == 201
+    assert r.json()["items"] == []
+
+
+async def test_los_articulos_del_ingreso_entran_en_el_cobro(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _cab(client, a)
+    ticket = (await _ingresar(
+        client, a, cab, placa="LAV111", items=[{"codigo": "lavada"}],
+    )).json()
+
+    cotizacion = await client.get(
+        f"/api/v1/t/{a.slug}/tickets/{ticket['id']}/cotizar", headers=cab
+    )
+    conceptos = [linea["concepto"] for linea in cotizacion.json()["lineas"]]
+    assert any("Lavada" in c for c in conceptos)

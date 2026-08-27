@@ -10,6 +10,11 @@ from app.models.ticket import EstadoTicket, MetodoPago
 from app.schemas.tarifa import CotizacionOut
 
 
+class ItemIn(BaseModel):
+    codigo: str
+    cantidad: int = Field(default=1, ge=1, le=99)
+
+
 class IngresoIn(BaseModel):
     parking_lot_id: uuid.UUID
     vehicle_type_id: uuid.UUID
@@ -17,11 +22,11 @@ class IngresoIn(BaseModel):
     observaciones: str | None = Field(default=None, max_length=300)
     # D6: el operario confirma que de verdad son dos ingresos distintos.
     forzar: bool = False
-
-
-class ItemIn(BaseModel):
-    codigo: str
-    cantidad: int = Field(default=1, ge=1, le=99)
+    # Artículos entregados en el momento del ingreso: el casco que se guarda
+    # al recibir la moto, por ejemplo. Van aquí y no en una llamada aparte
+    # porque el ticket y lo que se entregó tienen que nacer juntos: si el
+    # segundo paso fallara, el casco quedaría entregado y sin cobrar.
+    items: list[ItemIn] = Field(default_factory=list)
 
 
 class CobroIn(BaseModel):

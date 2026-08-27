@@ -1,13 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 
+import IconoVehiculo from './IconoVehiculo';
+
 /**
  * Registro de ingreso.
  *
  * La pantalla que más se usa del sistema: el operario la abre decenas de
  * veces por turno, de pie y con una mano. El objetivo es que un ingreso
- * salga en menos de cinco segundos, así que el tipo de vehículo son
- * botones grandes (no un desplegable) y la placa se escribe de una vez.
+ * salga en menos de cinco segundos.
+ *
+ * El campo de la placa imita una placa real porque es exactamente lo que
+ * el operario está copiando del vehículo que tiene delante.
+ *
+ * Los adicionales van aquí y no en una pantalla posterior: el casco se
+ * entrega en el mismo momento en que se recibe la moto, y se registran
+ * junto con el ticket para que no pueda quedar entregado y sin cobrar.
  */
+
+const LLAVE_DISPOSITIVO = 'zp_device';
+
+function obtenerHuella(): string {
+  try {
+    let huella = localStorage.getItem(LLAVE_DISPOSITIVO);
+    if (!huella) {
+      huella = crypto.randomUUID();
+      localStorage.setItem(LLAVE_DISPOSITIVO, huella);
+    }
+    return huella;
+  } catch {
+    return '';
+  }
+}
 
 interface Tipo {
   id: string;
@@ -19,6 +42,11 @@ interface Sede {
   id: string;
   codigo: string;
   nombre: string;
+}
+interface Articulo {
+  codigo: string;
+  nombre: string;
+  precio: string;
 }
 interface TicketAbierto {
   id: string;
@@ -34,32 +62,50 @@ type Estado =
   | { fase: 'listo'; codigo: string; placa: string | null }
   | { fase: 'error'; mensaje: string };
 
-const ICONOS: Record<string, string> = {
-  carro: '🚗',
-  moto: '🏍️',
-  bicicleta: '🚲',
-  camioneta: '🚙',
-  patineta: '🛴',
-  camion: '🚚',
-};
+function pesos(valor: string | number): string {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(Number(valor));
+}
 
 function haceCuanto(iso: string): string {
   const minutos = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (minutos < 60) return `hace ${minutos} min`;
-  const horas = Math.floor(minutos / 60);
-  return `hace ${horas} h ${minutos % 60} min`;
+  return `hace ${Math.floor(minutos / 60)} h ${minutos % 60} min`;
+}
+
+function IconoCheck() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor"
+         strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m4 12 6 6L20 6" />
+    </svg>
+  );
+}
+
+function IconoError() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 shrink-0" fill="none"
+         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v6" /><path d="M12 16.5v.01" />
+    </svg>
+  );
 }
 
 interface Props {
   tenant: string;
   sedes: Sede[];
   tipos: Tipo[];
+  articulos: Articulo[];
 }
 
-export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
+export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Props) {
   const [sede, setSede] = useState(sedes[0]?.id ?? '');
   const [tipo, setTipo] = useState(tipos[0]?.id ?? '');
   const [placa, setPlaca] = useState('');
+  const [elegidos, setElegidos] = useState<string[]>([]);
   const [estado, setEstado] = useState<Estado>({ fase: 'form' });
   const campoPlaca = useRef<HTMLInputElement>(null);
 
@@ -69,6 +115,12 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
   useEffect(() => {
     if (necesitaPlaca) campoPlaca.current?.focus();
   }, [tipo, necesitaPlaca]);
+
+  function alternar(codigo: string) {
+    setElegidos((actual) =>
+      actual.includes(codigo) ? actual.filter((c) => c !== codigo) : [...actual, codigo],
+    );
+  }
 
   async function registrar(forzar = false) {
     setEstado({ fase: 'enviando' });
@@ -80,6 +132,7 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
           parking_lot_id: sede,
           vehicle_type_id: tipo,
           placa: placa.trim() || null,
+          items: elegidos.map((codigo) => ({ codigo, cantidad: 1 })),
           forzar,
         }),
       });
@@ -90,14 +143,15 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
         return;
       }
       if (!res.ok) {
-        const mensaje =
-          typeof datos.detail === 'string'
-            ? datos.detail
-            : (datos.detail?.[0]?.msg ?? 'No se pudo registrar');
-        setEstado({ fase: 'error', mensaje });
+        setEstado({
+          fase: 'error',
+          mensaje:
+            typeof datos.detail === 'string'
+              ? datos.detail
+              : (datos.detail?.[0]?.msg ?? 'No se pudo registrar'),
+        });
         return;
       }
-
       setEstado({ fase: 'listo', codigo: datos.codigo, placa: datos.placa });
     } catch {
       setEstado({ fase: 'error', mensaje: 'Sin conexión con el servidor' });
@@ -106,6 +160,7 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
 
   function otroMas() {
     setPlaca('');
+    setElegidos([]);
     setEstado({ fase: 'form' });
     campoPlaca.current?.focus();
   }
@@ -113,28 +168,33 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
   // ── Confirmación ──────────────────────────────────────────────────────
   if (estado.fase === 'listo') {
     return (
-      <div className="space-y-6 text-center">
-        <div className="rounded-2xl bg-emerald-50 py-10 dark:bg-emerald-950">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            Ingreso registrado
+      <div className="space-y-4">
+        <div className="rounded-zp border-2 border-success bg-surface-container-lowest p-8 text-center">
+          <p className="flex items-center justify-center gap-2 text-zp-body font-bold uppercase
+                        tracking-wide text-success">
+            <IconoCheck /> Ingreso registrado
           </p>
-          <p className="mt-2 text-4xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">
-            {estado.codigo}
-          </p>
+          {estado.placa ? (
+            <span className="placa mt-5 text-zp-2xl">{estado.placa}</span>
+          ) : (
+            <p className="mt-5 text-zp-2xl font-extrabold">{estado.codigo}</p>
+          )}
           {estado.placa && (
-            <p className="mt-1 text-lg text-emerald-700 dark:text-emerald-300">{estado.placa}</p>
+            <p className="mt-3 text-zp-body text-on-surface-variant">{estado.codigo}</p>
           )}
         </div>
+
         <button
           onClick={otroMas}
-          className="w-full rounded-xl bg-brand-600 px-4 py-4 text-lg font-semibold text-white
-                     active:bg-brand-700"
+          className="w-full rounded-zp border-2 border-outline bg-primary px-4 py-4 text-zp-lg
+                     font-extrabold uppercase tracking-wide text-on-primary active:bg-primary-container"
         >
           Registrar otro
         </button>
         <a
           href={`/t/${tenant}`}
-          className="block text-sm font-medium text-brand-600 dark:text-brand-500"
+          className="block w-full rounded-zp border-2 border-outline bg-surface-container-lowest
+                     px-4 py-4 text-center text-zp-body font-bold active:bg-surface-container"
         >
           Volver al tablero
         </a>
@@ -145,45 +205,42 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
   // ── Aviso de placa repetida (D6) ──────────────────────────────────────
   if (estado.fase === 'duplicada') {
     return (
-      <div className="space-y-5">
-        <div className="rounded-2xl bg-amber-50 p-5 dark:bg-amber-950">
-          <p className="font-semibold text-amber-900 dark:text-amber-100">
-            Esa placa ya está adentro
-          </p>
-          <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
-            El ticket <strong>{estado.existente.codigo}</strong> con placa{' '}
-            <strong>{estado.existente.placa}</strong> entró{' '}
-            {haceCuanto(estado.existente.entrada_at)}.
+      <div className="space-y-4">
+        <div className="rounded-zp border-2 border-warning bg-surface-container-lowest p-5">
+          <p className="text-zp-lg font-extrabold">Esa placa ya está adentro</p>
+          <div className="mt-4 flex items-center gap-3">
+            <span className="placa text-zp-lg">{estado.existente.placa}</span>
+            <span className="text-zp-caption text-on-surface-variant">
+              {estado.existente.codigo} · entró {haceCuanto(estado.existente.entrada_at)}
+            </span>
+          </div>
+          <p className="mt-4 text-zp-body text-on-surface-variant">
+            Casi siempre es la placa mal digitada la primera vez. ¿Qué pasó?
           </p>
         </div>
 
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Casi siempre es la placa mal digitada la primera vez. ¿Qué pasó?
-        </p>
-
-        <div className="space-y-3">
-          <a
-            href={`/t/${tenant}/tickets/${estado.existente.id}`}
-            className="block w-full rounded-xl bg-brand-600 px-4 py-4 text-center text-lg
-                       font-semibold text-white active:bg-brand-700"
-          >
-            Es el mismo — abrir su ticket
-          </a>
-          <button
-            onClick={() => registrar(true)}
-            className="w-full rounded-xl bg-white px-4 py-4 text-lg font-semibold text-slate-900
-                       shadow-sm active:bg-slate-100 dark:bg-slate-900 dark:text-slate-100
-                       dark:active:bg-slate-800"
-          >
-            Son dos vehículos distintos
-          </button>
-          <button
-            onClick={() => setEstado({ fase: 'form' })}
-            className="w-full py-2 text-sm font-medium text-slate-600 dark:text-slate-300"
-          >
-            Corregir la placa
-          </button>
-        </div>
+        <a
+          href={`/t/${tenant}/tickets/${estado.existente.id}`}
+          className="block w-full rounded-zp border-2 border-outline bg-primary px-4 py-4
+                     text-center text-zp-lg font-extrabold uppercase tracking-wide
+                     text-on-primary active:bg-primary-container"
+        >
+          Es el mismo — abrir su ticket
+        </a>
+        <button
+          onClick={() => registrar(true)}
+          className="w-full rounded-zp border-2 border-outline bg-surface-container-lowest px-4
+                     py-4 text-zp-body font-bold active:bg-surface-container"
+        >
+          Son dos vehículos distintos
+        </button>
+        <button
+          onClick={() => setEstado({ fase: 'form' })}
+          className="w-full py-2 text-zp-caption font-bold uppercase tracking-wide
+                     text-on-surface-variant"
+        >
+          Corregir la placa
+        </button>
       </div>
     );
   }
@@ -200,13 +257,15 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
       }}
     >
       {sedes.length > 1 && (
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Sede</span>
+        <label className="block space-y-2">
+          <span className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+            Sede
+          </span>
           <select
             value={sede}
             onChange={(e) => setSede(e.target.value)}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base
-                       dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="w-full rounded-zp border-2 border-outline bg-surface-container-lowest
+                       px-4 py-3 text-zp-body font-semibold text-on-surface"
           >
             {sedes.map((s) => (
               <option key={s.id} value={s.id}>
@@ -217,34 +276,38 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
         </label>
       )}
 
-      <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+      <fieldset className="space-y-3">
+        <legend className="mb-3 text-zp-caption font-bold uppercase tracking-wide
+                           text-on-surface-variant">
           Tipo de vehículo
         </legend>
-        <div className="grid grid-cols-3 gap-2.5">
-          {tipos.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTipo(t.id)}
-              aria-pressed={t.id === tipo}
-              className={`flex flex-col items-center gap-1 rounded-xl px-2 py-4 transition ${
-                t.id === tipo
-                  ? 'bg-brand-600 text-white shadow-md'
-                  : 'bg-white text-slate-700 shadow-sm active:bg-slate-100 ' +
-                    'dark:bg-slate-900 dark:text-slate-200 dark:active:bg-slate-800'
-              }`}
-            >
-              <span className="text-3xl leading-none">{ICONOS[t.codigo] ?? '🅿️'}</span>
-              <span className="text-sm font-medium">{t.nombre}</span>
-            </button>
-          ))}
+        <div className="grid grid-cols-3 gap-3">
+          {tipos.map((t) => {
+            const activo = t.id === tipo;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTipo(t.id)}
+                aria-pressed={activo}
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-zp border-2
+                            border-outline px-2 py-4 transition ${
+                              activo
+                                ? 'bg-primary text-on-primary'
+                                : 'bg-surface-container-lowest text-on-surface active:bg-surface-container'
+                            }`}
+              >
+                <IconoVehiculo codigo={t.codigo} className="h-8 w-8" />
+                <span className="text-zp-caption font-bold">{t.nombre}</span>
+              </button>
+            );
+          })}
         </div>
       </fieldset>
 
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-          Placa {!necesitaPlaca && <span className="font-normal">(opcional)</span>}
+      <label className="block space-y-2">
+        <span className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+          Placa {!necesitaPlaca && <span className="normal-case">(opcional)</span>}
         </span>
         <input
           ref={campoPlaca}
@@ -255,28 +318,75 @@ export default function RegistrarIngreso({ tenant, sedes, tipos }: Props) {
           autoCorrect="off"
           spellCheck={false}
           placeholder="ABC123"
-          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-center
-                     text-2xl font-bold tracking-widest text-slate-900 outline-none
-                     focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30
-                     dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          className="placa-campo"
         />
       </label>
+
+      {articulos.length > 0 && (
+        <fieldset className="space-y-3">
+          <legend className="mb-3 text-zp-caption font-bold uppercase tracking-wide
+                             text-on-surface-variant">
+            Adicionales
+          </legend>
+          <div className="space-y-3">
+            {articulos.map((a) => {
+              const marcado = elegidos.includes(a.codigo);
+              return (
+                <label
+                  key={a.codigo}
+                  className={`flex cursor-pointer items-center gap-4 rounded-zp border-2
+                              border-outline px-4 py-3 transition ${
+                                marcado
+                                  ? 'bg-primary text-on-primary'
+                                  : 'bg-surface-container-lowest active:bg-surface-container'
+                              }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcado}
+                    onChange={() => alternar(a.codigo)}
+                    className="sr-only"
+                  />
+                  {/* Casilla dibujada: la nativa es diminuta y no se puede
+                      agrandar de forma fiable en todos los navegadores. */}
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px]
+                                border-2 border-outline ${
+                                  marcado ? 'bg-on-primary text-primary' : 'bg-surface-container-lowest'
+                                }`}
+                  >
+                    {marcado && <IconoCheck />}
+                  </span>
+                  <span className="flex-1 text-zp-body font-bold">{a.nombre}</span>
+                  <span className="text-zp-body font-semibold tabular-nums">
+                    {pesos(a.precio)}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
 
       {estado.fase === 'error' && (
         <p
           role="alert"
-          className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800
-                     dark:bg-red-950 dark:text-red-200"
+          className="flex items-start gap-3 rounded-zp border-2 border-error
+                     bg-surface-container-lowest px-4 py-3 text-zp-body font-semibold text-error"
         >
-          {estado.mensaje}
+          <IconoError />
+          <span>{estado.mensaje}</span>
         </p>
       )}
 
       <button
         type="submit"
         disabled={enviando || (necesitaPlaca && !placa.trim())}
-        className="w-full rounded-xl bg-brand-600 px-4 py-5 text-xl font-semibold text-white
-                   active:bg-brand-700 disabled:bg-slate-400"
+        className="w-full rounded-zp border-2 border-outline bg-primary px-4 py-5 text-zp-xl
+                   font-extrabold uppercase tracking-wide text-on-primary transition
+                   active:bg-primary-container disabled:border-outline-variant
+                   disabled:bg-surface-container-high disabled:text-on-surface-variant"
       >
         {enviando ? 'Registrando…' : 'Registrar ingreso'}
       </button>
