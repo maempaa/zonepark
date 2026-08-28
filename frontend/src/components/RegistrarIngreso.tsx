@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import IconoVehiculo from './IconoVehiculo';
+import { idUnico } from '../lib/id';
 
 /**
  * Registro de ingreso.
@@ -23,7 +24,7 @@ function obtenerHuella(): string {
   try {
     let huella = localStorage.getItem(LLAVE_DISPOSITIVO);
     if (!huella) {
-      huella = crypto.randomUUID();
+      huella = idUnico();
       localStorage.setItem(LLAVE_DISPOSITIVO, huella);
     }
     return huella;

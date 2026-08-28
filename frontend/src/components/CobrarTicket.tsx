@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { idUnico } from '../lib/id';
+
 /**
  * Cotización en vivo y cobro.
  *
@@ -93,6 +95,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
   const [recibo, setRecibo] = useState<{ pago: Pago; cotizacion: Cotizacion } | null>(null);
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState('');
   const llave = useRef<string>('');
 
   const cerrado = ticket.estado !== 'abierto' || recibo !== null;
@@ -100,9 +103,16 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
   async function traerCotizacion() {
     try {
       const res = await fetch(`/api/v1/t/${tenant}/tickets/${ticket.id}/cotizar`);
-      if (res.ok) setCotizacion(await res.json());
+      if (res.ok) {
+        setCotizacion(await res.json());
+        setError('');
+        return;
+      }
+      // Sin cotización el botón de cobrar queda deshabilitado. Callarlo
+      // haría que la pantalla pareciera rota en vez de avisar.
+      setError('No se pudo calcular el valor. Reintentando…');
     } catch {
-      /* se reintenta en el siguiente ciclo */
+      setError('Sin conexión. Reintentando…');
     }
   }
 
@@ -126,7 +136,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
 
   function abrirCobro() {
     // Una llave por intento: los reintentos la reutilizan.
-    llave.current = crypto.randomUUID();
+    llave.current = idUnico();
     setRecibido('');
     setError('');
     setCobrando(true);
@@ -170,11 +180,21 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
       `TOTAL: ${pesos(recibo.pago.monto)}`,
     ].filter(Boolean).join('\n');
 
+    // `share` y `clipboard` tampoco existen fuera de contexto seguro; se
+    // comprueban antes de llamarlas en vez de confiar en el try.
     try {
-      if (navigator.share) await navigator.share({ text: texto });
-      else await navigator.clipboard.writeText(texto);
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ text: texto });
+        return;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(texto);
+        setAviso('Recibo copiado al portapapeles');
+        return;
+      }
+      setAviso('Este navegador no permite compartir; anota el total.');
     } catch {
-      /* el usuario canceló */
+      /* el usuario canceló el diálogo de compartir */
     }
   }
 
@@ -206,6 +226,12 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
 
         <Desglose cotizacion={recibo.cotizacion} />
 
+        {aviso && (
+          <p className="rounded-zp border-2 border-outline-variant px-4 py-3 text-zp-body
+                        text-on-surface-variant">
+            {aviso}
+          </p>
+        )}
         <button onClick={compartir} className={BOTON_LLANO}>Compartir recibo</button>
         <a href={`/t/${tenant}/buscar`} className={`${BOTON_PRIMARIO} block text-center`}>
           Siguiente vehículo
@@ -356,6 +382,14 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
           </div>
         </div>
       </div>
+
+      {error && (
+        <p role="alert"
+           className="flex items-start gap-3 rounded-zp border-2 border-error
+                      bg-surface-container-lowest px-4 py-3 text-zp-body font-semibold text-error">
+          <Icono d={ALERTA} /> <span>{error}</span>
+        </p>
+      )}
 
       {cotizacion && <Desglose cotizacion={cotizacion} />}
 
