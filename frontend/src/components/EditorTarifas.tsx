@@ -62,6 +62,90 @@ interface Plan {
   estado: string;
 }
 
+/**
+ * Esquemas de cobro tal como los nombra un parqueadero, no como los llama
+ * el motor. "Por hora" y "Por fracción" son el mismo modo por dentro
+ * —bloques de tiempo— y solo se diferencian en el tamaño del bloque; que
+ * el administrador tenga que saber eso no aporta nada.
+ */
+interface Esquema {
+  clave: string;
+  etiqueta: string;
+  descripcion: string;
+  modo: string;
+  /** Minutos del bloque, cuando el esquema los fija. */
+  bloque?: number;
+  /** Campos de precio que el esquema necesita. */
+  precios: Array<'precio_bloque' | 'precio_minuto' | 'precio_plena' | 'precio_dia'>;
+  /** Si el administrador puede ajustar el tamaño del bloque. */
+  bloqueEditable?: boolean;
+  diaEditable?: boolean;
+}
+
+const ESQUEMAS: Esquema[] = [
+  {
+    clave: 'hora',
+    etiqueta: 'Por hora',
+    descripcion: 'Cada hora empezada se cobra completa',
+    modo: 'por_bloque',
+    bloque: 60,
+    precios: ['precio_bloque'],
+  },
+  {
+    clave: 'fraccion',
+    etiqueta: 'Por fracción',
+    descripcion: 'Cada fracción empezada se cobra completa',
+    modo: 'por_bloque',
+    precios: ['precio_bloque'],
+    bloqueEditable: true,
+  },
+  {
+    clave: 'minuto',
+    etiqueta: 'Por minuto',
+    descripcion: 'Se cobra el tiempo exacto',
+    modo: 'por_minuto',
+    precios: ['precio_minuto'],
+  },
+  {
+    clave: 'primera_luego_minuto',
+    etiqueta: 'Primer bloque y luego minutos',
+    descripcion: 'El primer bloque completo, después al minuto',
+    modo: 'primer_bloque_luego_minuto',
+    precios: ['precio_bloque', 'precio_minuto'],
+    bloqueEditable: true,
+  },
+  {
+    clave: 'plena',
+    etiqueta: 'Tarifa plena',
+    descripcion: 'Un precio único, sin importar el tiempo',
+    modo: 'plena',
+    precios: ['precio_plena'],
+  },
+  {
+    clave: 'dia',
+    etiqueta: 'Por día',
+    descripcion: 'Cada día empezado se cobra completo',
+    modo: 'por_dia',
+    precios: ['precio_dia'],
+    diaEditable: true,
+  },
+];
+
+const ETIQUETA_PRECIO: Record<string, string> = {
+  precio_bloque: 'Precio',
+  precio_minuto: 'Precio por minuto',
+  precio_plena: 'Precio único',
+  precio_dia: 'Precio por día',
+};
+
+/** El esquema que corresponde a una regla ya guardada. */
+function esquemaDe(regla: { modo: string; bloque_minutos: number }): Esquema | null {
+  if (regla.modo === 'por_bloque') {
+    return ESQUEMAS.find((e) => e.clave === (regla.bloque_minutos === 60 ? 'hora' : 'fraccion'))!;
+  }
+  return ESQUEMAS.find((e) => e.modo === regla.modo) ?? null;
+}
+
 const MODOS: Record<string, string> = {
   por_minuto: 'Por minuto',
   por_bloque: 'Por fracción',
@@ -132,6 +216,8 @@ const BOTON_LLANO =
   'rounded-zp border-2 border-outline bg-surface-container-lowest px-5 py-3 text-zp-body ' +
   'font-bold active:bg-surface-container';
 
+const ALERTA = 'M12 7v6|M12 16.5v.01';
+
 function Icono({ d, className = 'h-5 w-5' }: { d: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor"
@@ -157,8 +243,10 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
 
   // Primera tarifa: un precio por tipo de vehículo. No se inventa ninguno,
   // los pone el cliente.
-  const [primeros, setPrimeros] = useState<Record<string, { precio: string; bloque: string }>>(
-    () => Object.fromEntries(tipos.map((t) => [t.id, { precio: '', bloque: '60' }])),
+  const [primeros, setPrimeros] = useState<
+    Record<string, { esquema: string; precio: string; bloque: string }>
+  >(() =>
+    Object.fromEntries(tipos.map((t) => [t.id, { esquema: 'hora', precio: '', bloque: '30' }])),
   );
 
   const activo = planes.find((p) => p.estado === 'activo') ?? null;
@@ -252,20 +340,68 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
     setSucio(true);
   }
 
+  /**
+   * Cambia el esquema de cobro de una regla.
+   *
+   * Los precios que el esquema nuevo no usa se ponen a cero, y los que sí
+   * usa se dejan vacíos si venían en cero: así el administrador ve que
+   * tiene que ponerlos en vez de publicar una tarifa que cobra nada.
+   */
+  function cambiarEsquema(i: number, clave: string) {
+    const esquema = ESQUEMAS.find((e) => e.clave === clave);
+    if (!esquema) return;
+
+    setReglas((rs) =>
+      rs && rs.map((r, j) => {
+        if (j !== i) return r;
+        const actualizada: Regla = {
+          ...r,
+          modo: esquema.modo,
+          precio_minuto: '0',
+          precio_bloque: '0',
+          precio_plena: '0',
+          precio_dia: '0',
+        };
+        if (esquema.bloque) actualizada.bloque_minutos = esquema.bloque;
+        // Se conserva el precio que ya existía si el esquema nuevo lo usa.
+        for (const campo of esquema.precios) {
+          const previo = r[campo];
+          actualizada[campo] = previo && Number(previo) > 0 ? previo : '';
+        }
+        return actualizada;
+      }),
+    );
+    setSucio(true);
+  }
+
+  /** Reglas a las que les falta un precio que su esquema necesita. */
+  const incompletas = (reglas ?? []).filter((r) => {
+    const esquema = esquemaDe(r);
+    if (!esquema) return false;
+    return esquema.precios.some((c) => !r[c] || Number(r[c]) <= 0);
+  });
+
   async function crearPrimera(e: React.FormEvent) {
     e.preventDefault();
     const reglas = Object.entries(primeros)
       .filter(([, v]) => v.precio.trim() !== '')
-      .map(([tipoId, v]) => ({
-        codigo: `${tipos.find((t) => t.id === tipoId)?.codigo ?? tipoId}-general`,
-        vehicle_type_id: tipoId,
-        modo: 'por_bloque',
-        precio_bloque: v.precio,
-        bloque_minutos: Number(v.bloque) || 60,
-        gracia_minutos: 15,
-        redondeo_modo: 'cercano',
-        redondeo_paso: 50,
-      }));
+      .map(([tipoId, v]) => {
+        const esquema = ESQUEMAS.find((e) => e.clave === v.esquema)!;
+        const base = {
+          codigo: `${tipos.find((t) => t.id === tipoId)?.codigo ?? tipoId}-general`,
+          vehicle_type_id: tipoId,
+          modo: esquema.modo,
+          gracia_minutos: 15,
+          redondeo_modo: 'cercano',
+          redondeo_paso: 50,
+        };
+        // El precio va al campo que su esquema usa.
+        const campo = esquema.precios[0];
+        const bloque = esquema.bloque ?? (Number(v.bloque) || 30);
+        return campo === 'precio_bloque'
+          ? { ...base, precio_bloque: v.precio, bloque_minutos: bloque }
+          : { ...base, [campo]: v.precio };
+      });
 
     if (reglas.length === 0) {
       setError('Pon al menos un precio para poder crear la tarifa');
@@ -378,55 +514,78 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
           ) : (
             <form onSubmit={crearPrimera} className="mt-6 space-y-4">
               <ul className="space-y-3">
-                {tipos.map((t) => (
-                  <li key={t.id}
-                      className="flex flex-wrap items-end gap-4 rounded-zp border-2
-                                 border-outline-variant p-4">
-                    <p className="min-w-32 flex-1 text-zp-body font-bold">{t.nombre}</p>
-                    <label className="w-40 space-y-1.5">
-                      <span className="text-zp-caption font-bold uppercase tracking-wide
-                                       text-on-surface-variant">Precio</span>
-                      <input
-                        inputMode="numeric"
-                        value={primeros[t.id]?.precio ?? ''}
-                        placeholder="3000"
-                        onChange={(e) =>
-                          setPrimeros({
-                            ...primeros,
-                            [t.id]: {
-                              ...primeros[t.id],
-                              precio: e.target.value.replace(/\D/g, ''),
-                            },
-                          })
-                        }
-                        className={`${CAMPO} text-right`}
-                      />
-                    </label>
-                    <label className="w-40 space-y-1.5">
-                      <span className="text-zp-caption font-bold uppercase tracking-wide
-                                       text-on-surface-variant">Cada … minutos</span>
-                      <input
-                        inputMode="numeric"
-                        value={primeros[t.id]?.bloque ?? '60'}
-                        onChange={(e) =>
-                          setPrimeros({
-                            ...primeros,
-                            [t.id]: {
-                              ...primeros[t.id],
-                              bloque: e.target.value.replace(/\D/g, ''),
-                            },
-                          })
-                        }
-                        className={`${CAMPO} text-right`}
-                      />
-                    </label>
-                  </li>
-                ))}
+                {tipos.map((t) => {
+                  const fila = primeros[t.id] ?? { esquema: 'hora', precio: '', bloque: '30' };
+                  const esquema = ESQUEMAS.find((e) => e.clave === fila.esquema)!;
+                  const poner = (cambio: Partial<typeof fila>) =>
+                    setPrimeros({ ...primeros, [t.id]: { ...fila, ...cambio } });
+
+                  return (
+                    <li key={t.id}
+                        className="space-y-3 rounded-zp border-2 border-outline-variant p-4">
+                      <p className="text-zp-body font-bold">{t.nombre}</p>
+
+                      <div className="flex flex-wrap gap-2">
+                        {ESQUEMAS.filter((e) =>
+                          ['hora', 'fraccion', 'minuto', 'plena'].includes(e.clave),
+                        ).map((e) => (
+                          <button
+                            key={e.clave}
+                            type="button"
+                            onClick={() => poner({ esquema: e.clave })}
+                            aria-pressed={fila.esquema === e.clave}
+                            className={`rounded-zp border-2 border-outline px-3 py-2
+                                        text-zp-caption font-bold ${
+                                          fila.esquema === e.clave
+                                            ? 'bg-primary text-on-primary'
+                                            : 'bg-surface-container-lowest'
+                                        }`}
+                          >
+                            {e.etiqueta}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap items-end gap-4">
+                        <label className="w-40 space-y-1.5">
+                          <span className="text-zp-caption font-bold uppercase tracking-wide
+                                           text-on-surface-variant">
+                            {ETIQUETA_PRECIO[esquema.precios[0]]}
+                          </span>
+                          <input
+                            inputMode="numeric"
+                            value={fila.precio}
+                            placeholder="3000"
+                            onChange={(e) => poner({ precio: e.target.value.replace(/\D/g, '') })}
+                            className={`${CAMPO} text-right`}
+                          />
+                        </label>
+
+                        {esquema.bloqueEditable && (
+                          <label className="w-40 space-y-1.5">
+                            <span className="text-zp-caption font-bold uppercase tracking-wide
+                                             text-on-surface-variant">Cada … minutos</span>
+                            <input
+                              inputMode="numeric"
+                              value={fila.bloque}
+                              onChange={(e) => poner({ bloque: e.target.value.replace(/\D/g, '') })}
+                              className={`${CAMPO} text-right`}
+                            />
+                          </label>
+                        )}
+
+                        <p className="pb-2 text-zp-caption text-on-surface-variant">
+                          {esquema.descripcion}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
               <p className="text-zp-caption text-on-surface-variant">
-                Los tipos que dejes sin precio quedan fuera de la tarifa y no se les podrá
-                registrar el ingreso. Se incluye una cortesía de 15 minutos y redondeo a $50,
-                ajustables después.
+                Cada tipo se cobra de una sola forma; podrás cambiarla después. Los que dejes
+                sin precio quedan fuera de la tarifa y no se les podrá registrar el ingreso.
+                Se incluye una cortesía de 15 minutos y redondeo a $50, ajustables después.
               </p>
               <button type="submit" disabled={ocupado} className={BOTON_PRIMARIO}>
                 {ocupado ? 'Creando…' : 'Crear la primera tarifa'}
@@ -477,7 +636,11 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
               )}
             </h2>
             <div className="flex flex-wrap gap-3">
-              <button onClick={guardar} disabled={ocupado || !sucio} className={BOTON_LLANO}>
+              <button
+                onClick={guardar}
+                disabled={ocupado || !sucio || incompletas.length > 0}
+                className={BOTON_LLANO}
+              >
                 Guardar
               </button>
               <button onClick={publicar} disabled={ocupado || sucio} className={BOTON_PRIMARIO}>
@@ -494,6 +657,18 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
             </div>
           </div>
 
+          {incompletas.length > 0 && (
+            <p className="flex items-start gap-3 rounded-zp border-2 border-warning
+                          bg-surface-container-lowest px-4 py-3 text-zp-body">
+              <Icono d={ALERTA} className="h-6 w-6 shrink-0" />
+              <span>
+                Falta el precio de{' '}
+                {incompletas.map((r) => nombreTipo[r.vehicle_type_id] ?? r.codigo).join(', ')}.
+                Una tarifa en cero cobraría gratis.
+              </span>
+            </p>
+          )}
+
           <ul className="space-y-4">
             {reglas.map((r, i) => (
               <li
@@ -506,7 +681,7 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
                   </p>
                   <p className="text-zp-caption font-bold uppercase tracking-wide
                                 text-on-surface-variant">
-                    {MODOS[r.modo] ?? r.modo}
+                    {esquemaDe(r)?.etiqueta ?? MODOS[r.modo] ?? r.modo}
                     {r.franja && (
                       <> · {r.franja.solo_festivos
                         ? 'festivos'
@@ -522,36 +697,65 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
                   </p>
                 )}
 
+                {r.modo === 'escalonado' ? (
+                  <p className="mt-4 rounded-zp border-2 border-outline-variant px-4 py-3
+                                text-zp-caption text-on-surface-variant">
+                    Esta tarifa va por escalones. Cambiarla a otro esquema borraría los
+                    tramos de abajo, así que se edita creando un plan nuevo.
+                  </p>
+                ) : (
+                  <fieldset className="mt-5">
+                    <legend className="mb-2 text-zp-caption font-bold uppercase tracking-wide
+                                       text-on-surface-variant">
+                      Cómo se cobra
+                    </legend>
+                    <div className="flex flex-wrap gap-2">
+                      {ESQUEMAS.map((e) => {
+                        const actual = esquemaDe(r)?.clave === e.clave;
+                        return (
+                          <button
+                            key={e.clave}
+                            type="button"
+                            onClick={() => cambiarEsquema(i, e.clave)}
+                            aria-pressed={actual}
+                            title={e.descripcion}
+                            className={`rounded-zp border-2 border-outline px-3 py-2
+                                        text-zp-caption font-bold ${
+                                          actual
+                                            ? 'bg-primary text-on-primary'
+                                            : 'bg-surface-container-lowest active:bg-surface-container'
+                                        }`}
+                          >
+                            {e.etiqueta}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-zp-caption text-on-surface-variant">
+                      {esquemaDe(r)?.descripcion}
+                    </p>
+                  </fieldset>
+                )}
+
                 <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {(r.modo === 'por_bloque' || r.modo === 'primer_bloque_luego_minuto') && (
-                    <>
-                      <Campo etiqueta="Precio por fracción"
-                             valor={r.precio_bloque}
-                             onChange={(v) => cambiar(i, 'precio_bloque', v)} />
-                      <Campo etiqueta="Minutos por fracción" entero
-                             valor={String(r.bloque_minutos)}
-                             onChange={(v) => cambiar(i, 'bloque_minutos', Number(v) || 1)} />
-                    </>
+                  {(esquemaDe(r)?.precios ?? []).map((campo) => (
+                    <Campo
+                      key={campo}
+                      etiqueta={ETIQUETA_PRECIO[campo]}
+                      valor={r[campo]}
+                      resaltado={!r[campo] || Number(r[campo]) <= 0}
+                      onChange={(v) => cambiar(i, campo, v)}
+                    />
+                  ))}
+                  {esquemaDe(r)?.bloqueEditable && (
+                    <Campo etiqueta="Minutos por fracción" entero
+                           valor={String(r.bloque_minutos)}
+                           onChange={(v) => cambiar(i, 'bloque_minutos', Number(v) || 1)} />
                   )}
-                  {(r.modo === 'por_minuto' || r.modo === 'primer_bloque_luego_minuto') && (
-                    <Campo etiqueta="Precio por minuto"
-                           valor={r.precio_minuto}
-                           onChange={(v) => cambiar(i, 'precio_minuto', v)} />
-                  )}
-                  {r.modo === 'plena' && (
-                    <Campo etiqueta="Precio único"
-                           valor={r.precio_plena}
-                           onChange={(v) => cambiar(i, 'precio_plena', v)} />
-                  )}
-                  {r.modo === 'por_dia' && (
-                    <>
-                      <Campo etiqueta="Precio por día"
-                             valor={r.precio_dia}
-                             onChange={(v) => cambiar(i, 'precio_dia', v)} />
-                      <Campo etiqueta="Horas por día" entero
-                             valor={String(r.dia_horas)}
-                             onChange={(v) => cambiar(i, 'dia_horas', Number(v) || 24)} />
-                    </>
+                  {esquemaDe(r)?.diaEditable && (
+                    <Campo etiqueta="Horas por día" entero
+                           valor={String(r.dia_horas)}
+                           onChange={(v) => cambiar(i, 'dia_horas', Number(v) || 24)} />
                   )}
 
                   <Campo etiqueta="Cortesía (min)" entero
@@ -718,13 +922,14 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
 }
 
 function Campo({
-  etiqueta, valor, onChange, entero = false, opcional = false,
+  etiqueta, valor, onChange, entero = false, opcional = false, resaltado = false,
 }: {
   etiqueta: string;
   valor: string;
   onChange: (v: string) => void;
   entero?: boolean;
   opcional?: boolean;
+  resaltado?: boolean;
 }) {
   return (
     <label className="block space-y-1.5">
@@ -739,7 +944,7 @@ function Campo({
           const limpio = e.target.value.replace(/[^\d.]/g, '');
           onChange(entero ? limpio.replace(/\./g, '') : limpio);
         }}
-        className={CAMPO}
+        className={resaltado ? `${CAMPO} border-warning` : CAMPO}
       />
     </label>
   );
