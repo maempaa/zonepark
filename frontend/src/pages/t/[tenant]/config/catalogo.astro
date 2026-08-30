@@ -1,0 +1,36 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import CabeceraPantalla from '../../../../components/CabeceraPantalla.astro';
+import EditorCatalogo from '../../../../components/EditorCatalogo';
+import { llamarApi } from '../../../../lib/api';
+
+const { tenant } = Astro.params;
+
+const perfilRes = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect(`/t/${tenant}/login`);
+const perfil = await perfilRes.json();
+
+if (!perfil.permisos.includes('lot:read')) {
+  return new Response('No tienes permiso para ver el catálogo', { status: 403 });
+}
+const puedeEditar = perfil.permisos.includes('vehicle_type:manage');
+
+const [tiposRes, articulosRes] = await Promise.all([
+  llamarApi(Astro.cookies, tenant!, '/tipos-vehiculo?solo_activos=false'),
+  llamarApi(Astro.cookies, tenant!, '/articulos?solo_activos=false'),
+]);
+const tipos = tiposRes?.ok ? await tiposRes.json() : [];
+const articulos = articulosRes?.ok ? await articulosRes.json() : [];
+---
+<Base titulo="Catálogo" anchura="tablet">
+  <CabeceraPantalla titulo="Catálogo" volverA={`/t/${tenant}`} etiquetaVolver="Volver al tablero" />
+  <main class="flex-1 px-6 py-6">
+    <EditorCatalogo
+      tenant={tenant!}
+      tipos={tipos}
+      articulos={articulos}
+      puedeEditar={puedeEditar}
+      client:load
+    />
+  </main>
+</Base>

@@ -481,3 +481,46 @@ async def test_al_operario_le_falta_permiso_para_editar_tarifas(dos_tenants, cli
         f"/api/v1/t/{a.slug}/planes/{planes[0]['id']}", headers=await _operario(client, a)
     )
     assert r.status_code == 403
+
+
+# ── Salida para un parqueadero que se quedó sin tipos ─────────────────────
+
+async def test_cargar_los_tipos_predeterminados(dos_tenants, client):
+    """Salida por la interfaz para quien los borró todos o para los
+    parqueaderos creados antes de que el alta los sembrara."""
+    from sqlalchemy import delete
+
+    from app.models.catalogo import VehicleType
+
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+
+    async with tenant_scope(a.id) as session:
+        await session.execute(delete(VehicleType))
+
+    vacio = (await client.get(f"/api/v1/t/{a.slug}/tipos-vehiculo", headers=cab)).json()
+    assert vacio == []
+
+    r = await client.post(f"/api/v1/t/{a.slug}/tipos-vehiculo/predeterminados", headers=cab)
+    assert r.status_code == 200
+    assert {t["codigo"] for t in r.json()} == {"carro", "moto", "bicicleta"}
+
+
+async def test_cargar_los_predeterminados_no_duplica(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    antes = (await client.get(f"/api/v1/t/{a.slug}/tipos-vehiculo", headers=cab)).json()
+
+    await client.post(f"/api/v1/t/{a.slug}/tipos-vehiculo/predeterminados", headers=cab)
+    despues = (await client.get(f"/api/v1/t/{a.slug}/tipos-vehiculo", headers=cab)).json()
+
+    assert len(despues) == len(antes)
+
+
+async def test_al_operario_le_falta_permiso_para_cargar_predeterminados(dos_tenants, client):
+    a, _ = dos_tenants
+    r = await client.post(
+        f"/api/v1/t/{a.slug}/tipos-vehiculo/predeterminados",
+        headers=await _operario(client, a),
+    )
+    assert r.status_code == 403

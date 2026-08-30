@@ -19,6 +19,43 @@ from app.models.rbac import MembershipRole, Permission, Role, RolePermission
 from app.models.tenant import Tenant
 from app.models.user import Membership, User
 
+# Tipos de vehículo con los que arranca cualquier parqueadero. Son solo un
+# punto de partida: el cliente los renombra, los desactiva o añade los
+# suyos desde la pantalla de catálogo.
+#
+# Aquí no se siembran artículos ni tarifas **a propósito**: llevan precio,
+# y un precio inventado que alguien cobre sin darse cuenta es peor que una
+# pantalla vacía. Lo estructural se puede suponer; el dinero no.
+TIPOS_POR_DEFECTO: list[tuple[str, str, str, bool, int]] = [
+    # (código, nombre, icono, requiere placa, orden)
+    ("carro", "Carro", "car", True, 1),
+    ("moto", "Moto", "motorcycle", True, 2),
+    ("bicicleta", "Bicicleta", "bike", False, 3),
+]
+
+
+async def sembrar_tipos_de_vehiculo(session: AsyncSession, tenant_id: uuid.UUID) -> int:
+    """Crea los tipos que falten. Idempotente."""
+    from app.models.catalogo import VehicleType
+
+    creados = 0
+    for codigo, nombre, icono, placa, orden in TIPOS_POR_DEFECTO:
+        existe = await session.scalar(
+            select(VehicleType).where(
+                VehicleType.tenant_id == tenant_id, VehicleType.codigo == codigo
+            )
+        )
+        if existe is None:
+            session.add(
+                VehicleType(
+                    tenant_id=tenant_id, codigo=codigo, nombre=nombre, icono=icono,
+                    requiere_placa=placa, orden=orden,
+                )
+            )
+            creados += 1
+    await session.flush()
+    return creados
+
 
 async def sembrar_permisos(session: AsyncSession) -> int:
     """Sincroniza el catálogo global de permisos. Idempotente."""

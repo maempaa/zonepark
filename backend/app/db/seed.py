@@ -26,17 +26,11 @@ from app.services.tenants import (
     crear_tenant,
     provisionar_roles,
     sembrar_permisos,
+    sembrar_tipos_de_vehiculo,
 )
 
 # ── Catálogos y tarifas de ejemplo ───────────────────────────────────────
 # Valores en el orden de magnitud de un parqueadero real de Bogotá.
-
-TIPOS_DE_VEHICULO = [
-    # (código, nombre, icono, requiere placa, orden)
-    ("carro", "Carro", "car", True, 1),
-    ("moto", "Moto", "motorcycle", True, 2),
-    ("bicicleta", "Bicicleta", "bike", False, 3),
-]
 
 ARTICULOS = [
     ("casco", "Guarda casco", Decimal("1000.00"), 1),
@@ -62,21 +56,16 @@ async def sembrar_catalogos_y_tarifas(session, tenant) -> None:
     fracción con tope diario, una tarifa nocturna más barata, y un tipo
     que se cobra a tarifa plena.
     """
-    tipos = {}
-    for codigo, nombre, icono, placa, orden in TIPOS_DE_VEHICULO:
-        tipo = await session.scalar(
-            select(VehicleType).where(
-                VehicleType.tenant_id == tenant.id, VehicleType.codigo == codigo
+    # Los mismos tipos con los que nace cualquier cliente.
+    await sembrar_tipos_de_vehiculo(session, tenant.id)
+    tipos = {
+        t.codigo: t
+        for t in (
+            await session.scalars(
+                select(VehicleType).where(VehicleType.tenant_id == tenant.id)
             )
-        )
-        if tipo is None:
-            tipo = VehicleType(
-                tenant_id=tenant.id, codigo=codigo, nombre=nombre, icono=icono,
-                requiere_placa=placa, orden=orden,
-            )
-            session.add(tipo)
-            await session.flush()
-        tipos[codigo] = tipo
+        ).all()
+    }
 
     for codigo, nombre, precio, orden in ARTICULOS:
         existe = await session.scalar(

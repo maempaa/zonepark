@@ -14,6 +14,7 @@ from app.schemas.catalogo import (
     TipoVehiculoPatch,
 )
 from app.services import audit
+from app.services.tenants import sembrar_tipos_de_vehiculo
 
 router = APIRouter(tags=["parametrización"])
 
@@ -87,6 +88,36 @@ async def editar_tipo(
         request=request,
     )
     return tipo
+
+
+@router.post("/tipos-vehiculo/predeterminados", response_model=list[TipoVehiculoOut])
+async def cargar_tipos_predeterminados(
+    tenant: TenantDep,
+    session: SesionDep,
+    identidad: IdentidadDep,
+    request: Request,
+    _: None = Depends(requiere("vehicle_type:manage")),
+) -> list[VehicleType]:
+    """Crea los tipos habituales que falten: carro, moto y bicicleta.
+
+    Existe para los parqueaderos creados antes de que el alta los
+    sembrara, y como salida para quien los borró todos y se quedó sin
+    poder crear una tarifa. Es idempotente: no duplica los que ya estén.
+    """
+    creados = await sembrar_tipos_de_vehiculo(session, tenant.id)
+    if creados:
+        await audit.registrar(
+            session, accion="tipo_vehiculo.defaults", entidad="vehicle_type",
+            tenant_id=tenant.id, actor_user_id=identidad.user_id,
+            despues={"creados": creados}, request=request,
+        )
+    return list(
+        (
+            await session.scalars(
+                select(VehicleType).order_by(VehicleType.orden, VehicleType.nombre)
+            )
+        ).all()
+    )
 
 
 # ── Artículos y servicios ────────────────────────────────────────────────

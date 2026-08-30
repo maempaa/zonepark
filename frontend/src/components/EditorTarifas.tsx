@@ -155,6 +155,12 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
 
+  // Primera tarifa: un precio por tipo de vehículo. No se inventa ninguno,
+  // los pone el cliente.
+  const [primeros, setPrimeros] = useState<Record<string, { precio: string; bloque: string }>>(
+    () => Object.fromEntries(tipos.map((t) => [t.id, { precio: '', bloque: '60' }])),
+  );
+
   const activo = planes.find((p) => p.estado === 'activo') ?? null;
   const borrador = planes.find((p) => p.estado === 'borrador') ?? null;
 
@@ -246,6 +252,37 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
     setSucio(true);
   }
 
+  async function crearPrimera(e: React.FormEvent) {
+    e.preventDefault();
+    const reglas = Object.entries(primeros)
+      .filter(([, v]) => v.precio.trim() !== '')
+      .map(([tipoId, v]) => ({
+        codigo: `${tipos.find((t) => t.id === tipoId)?.codigo ?? tipoId}-general`,
+        vehicle_type_id: tipoId,
+        modo: 'por_bloque',
+        precio_bloque: v.precio,
+        bloque_minutos: Number(v.bloque) || 60,
+        gracia_minutos: 15,
+        redondeo_modo: 'cercano',
+        redondeo_paso: 50,
+      }));
+
+    if (reglas.length === 0) {
+      setError('Pon al menos un precio para poder crear la tarifa');
+      return;
+    }
+
+    const creado = await pedir('/planes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ codigo: 'general', nombre: 'Tarifa general', reglas }),
+    });
+    if (creado) {
+      await recargarPlanes();
+      setAviso('Borrador creado. Pruébalo abajo y publícalo cuando cuadre.');
+    }
+  }
+
   async function crearVersion() {
     if (!activo) return;
     const detalle = await pedir(`/planes/${activo.id}`);
@@ -319,7 +356,88 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
         </p>
       )}
 
+      {/* ── Primera tarifa ────────────────────────────────────────────── */}
+      {planes.length === 0 && (
+        <section className="rounded-zp border-2 border-outline bg-surface-container-lowest p-6">
+          <h2 className="text-zp-lg font-extrabold">Todavía no hay ninguna tarifa</h2>
+          <p className="mt-2 text-zp-body text-on-surface-variant">
+            Pon cuánto cobras por cada tipo de vehículo. Lo más común es cobrar por hora o
+            fracción: una hora empezada se cobra completa. Podrás cambiarlo y añadir tarifas
+            nocturnas o de festivo cuando quieras.
+          </p>
+
+          {tipos.length === 0 ? (
+            <p className="mt-5 rounded-zp border-2 border-warning px-4 py-3 text-zp-body">
+              Antes necesitas tipos de vehículo.{' '}
+              <a href={`/t/${tenant}/config/catalogo`}
+                 className="font-bold underline underline-offset-4">
+                Créalos en el catálogo
+              </a>
+              .
+            </p>
+          ) : (
+            <form onSubmit={crearPrimera} className="mt-6 space-y-4">
+              <ul className="space-y-3">
+                {tipos.map((t) => (
+                  <li key={t.id}
+                      className="flex flex-wrap items-end gap-4 rounded-zp border-2
+                                 border-outline-variant p-4">
+                    <p className="min-w-32 flex-1 text-zp-body font-bold">{t.nombre}</p>
+                    <label className="w-40 space-y-1.5">
+                      <span className="text-zp-caption font-bold uppercase tracking-wide
+                                       text-on-surface-variant">Precio</span>
+                      <input
+                        inputMode="numeric"
+                        value={primeros[t.id]?.precio ?? ''}
+                        placeholder="3000"
+                        onChange={(e) =>
+                          setPrimeros({
+                            ...primeros,
+                            [t.id]: {
+                              ...primeros[t.id],
+                              precio: e.target.value.replace(/\D/g, ''),
+                            },
+                          })
+                        }
+                        className={`${CAMPO} text-right`}
+                      />
+                    </label>
+                    <label className="w-40 space-y-1.5">
+                      <span className="text-zp-caption font-bold uppercase tracking-wide
+                                       text-on-surface-variant">Cada … minutos</span>
+                      <input
+                        inputMode="numeric"
+                        value={primeros[t.id]?.bloque ?? '60'}
+                        onChange={(e) =>
+                          setPrimeros({
+                            ...primeros,
+                            [t.id]: {
+                              ...primeros[t.id],
+                              bloque: e.target.value.replace(/\D/g, ''),
+                            },
+                          })
+                        }
+                        className={`${CAMPO} text-right`}
+                      />
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-zp-caption text-on-surface-variant">
+                Los tipos que dejes sin precio quedan fuera de la tarifa y no se les podrá
+                registrar el ingreso. Se incluye una cortesía de 15 minutos y redondeo a $50,
+                ajustables después.
+              </p>
+              <button type="submit" disabled={ocupado} className={BOTON_PRIMARIO}>
+                {ocupado ? 'Creando…' : 'Crear la primera tarifa'}
+              </button>
+            </form>
+          )}
+        </section>
+      )}
+
       {/* ── Estado y acciones ─────────────────────────────────────────── */}
+      {planes.length > 0 && (
       <section className="rounded-zp border-2 border-outline bg-surface-container-lowest p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -336,13 +454,14 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
             </button>
           )}
         </div>
-        {!borrador && (
+        {!borrador && activo && (
           <p className="mt-3 text-zp-caption text-on-surface-variant">
             Una tarifa publicada no se edita: se crea una versión nueva, se prueba y se
             publica. Así un ticket abierto hace días conserva la tarifa con la que entró.
           </p>
         )}
       </section>
+      )}
 
       {/* ── Editor del borrador ───────────────────────────────────────── */}
       {borrador && reglas && (
@@ -563,6 +682,7 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
       )}
 
       {/* ── Historial ─────────────────────────────────────────────────── */}
+      {planes.length > 0 && (
       <section className="space-y-3">
         <h2 className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
           Versiones
@@ -592,6 +712,7 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
           ))}
         </ul>
       </section>
+      )}
     </div>
   );
 }

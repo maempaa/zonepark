@@ -38,16 +38,7 @@ const tipos = tiposRes?.ok ? await tiposRes.json() : [];
   </header>
 
   <main class="flex-1 px-6 py-6">
-    {planes.length === 0 || tipos.length === 0 ? (
-      <p class="rounded-zp border-2 border-outline bg-surface-container-lowest p-5
-                text-zp-body text-on-surface-variant">
-        Todavía no hay planes tarifarios ni tipos de vehículo. Corre
-        <code class="mx-1 rounded border-2 border-outline-variant px-1.5 py-0.5 text-zp-caption">
-          make seed
-        </code>
-        para cargar los de ejemplo.
-      </p>
-    ) : puedeEditar ? (
+    {puedeEditar ? (
       <EditorTarifas tenant={tenant!} planes={planes} tipos={tipos} client:load />
     ) : (
       <div class="space-y-3">

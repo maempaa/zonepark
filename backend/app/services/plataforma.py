@@ -16,7 +16,13 @@ from app.models.parking_lot import ParkingLot
 from app.models.tenant import Tenant, TenantStatus
 from app.models.ticket import EstadoTicket, Ticket
 from app.models.user import Membership, User
-from app.services.tenants import crear_miembro, crear_sede, crear_tenant, sembrar_permisos
+from app.services.tenants import (
+    crear_miembro,
+    crear_sede,
+    crear_tenant,
+    sembrar_permisos,
+    sembrar_tipos_de_vehiculo,
+)
 
 
 class SlugOcupado(Exception):
@@ -98,9 +104,13 @@ async def crear_cliente(
 ) -> tuple[Tenant, User]:
     """Deja un parqueadero listo para operar en un solo paso.
 
-    Un tenant sin roles, sin sede y sin nadie que pueda entrar no sirve de
-    nada, así que las cuatro cosas nacen juntas. Si algo falla, la
-    transacción las deshace todas: no queda un cliente a medio crear.
+    Un tenant sin roles, sin sede, sin tipos de vehículo y sin nadie que
+    pueda entrar no sirve de nada, así que todo nace junto. Si algo falla,
+    la transacción lo deshace: no queda un cliente a medio crear.
+
+    Lo que **no** se crea son tarifas ni artículos: llevan precio, y un
+    precio inventado que alguien cobre sin darse cuenta es peor que una
+    pantalla vacía.
     """
     slug = slug.lower().strip()
     if await session.scalar(select(Tenant).where(Tenant.slug == slug)):
@@ -114,6 +124,10 @@ async def crear_cliente(
         session, slug=slug, nombre=nombre, razon_social=razon_social, nit=nit
     )
     await crear_sede(session, tenant=tenant, codigo=sede_codigo, nombre=sede_nombre)
+
+    # Sin tipos de vehículo no se puede crear ni una tarifa, y el cliente
+    # se quedaría bloqueado en su primera pantalla sin forma de salir.
+    await sembrar_tipos_de_vehiculo(session, tenant.id)
     user, _ = await crear_miembro(
         session,
         tenant=tenant,

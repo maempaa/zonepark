@@ -320,3 +320,105 @@ async def test_un_tenant_suspendido_no_se_reactiva_solo(superadmin, dos_tenants,
     async with system_scope() as session:
         tenant = await session.get(Tenant, a.id)
         assert tenant.status is TenantStatus.SUSPENDIDO
+
+
+# ── Un cliente nuevo tiene que poder arrancar solo ───────────────────────
+
+async def test_un_cliente_nuevo_nace_con_tipos_de_vehiculo(superadmin, client):
+    """Sin tipos no se puede crear una tarifa, y sin tarifa no se puede
+    registrar un ingreso: el cliente quedaría bloqueado en su primera
+    pantalla sin forma de salir."""
+    cab = await _entrar_plataforma(client, superadmin)
+    slug = f"arranque-{uuid.uuid4().hex[:8]}"
+    creado = (await client.post(
+        "/api/v1/admin/tenants", headers=cab, json=_cliente(slug)
+    )).json()
+
+    token = await entrar(client, slug, f"admin-{slug}@prueba.com.co", "contrasenalarga1")
+    tipos = (await client.get(
+        f"/api/v1/t/{slug}/tipos-vehiculo", headers=cabecera(token)
+    )).json()
+    assert {t["codigo"] for t in tipos} == {"carro", "moto", "bicicleta"}
+
+    async with system_scope() as session:
+        await session.delete(await session.get(Tenant, uuid.UUID(creado["id"])))
+        u = await session.scalar(
+            select(User).where(User.email == f"admin-{slug}@prueba.com.co")
+        )
+        if u:
+            await session.delete(u)
+
+
+async def test_un_cliente_nuevo_no_nace_con_articulos_ni_tarifas(superadmin, client):
+    """Los tipos no llevan precio, así que se pueden suponer. Los artículos
+    y las tarifas sí: un precio inventado que alguien cobre sin darse
+    cuenta es peor que una pantalla vacía."""
+    cab = await _entrar_plataforma(client, superadmin)
+    slug = f"sinprecio-{uuid.uuid4().hex[:8]}"
+    creado = (await client.post(
+        "/api/v1/admin/tenants", headers=cab, json=_cliente(slug)
+    )).json()
+
+    token = await entrar(client, slug, f"admin-{slug}@prueba.com.co", "contrasenalarga1")
+    cabt = cabecera(token)
+    assert (await client.get(f"/api/v1/t/{slug}/articulos", headers=cabt)).json() == []
+    assert (await client.get(f"/api/v1/t/{slug}/planes", headers=cabt)).json() == []
+
+    async with system_scope() as session:
+        await session.delete(await session.get(Tenant, uuid.UUID(creado["id"])))
+        u = await session.scalar(
+            select(User).where(User.email == f"admin-{slug}@prueba.com.co")
+        )
+        if u:
+            await session.delete(u)
+
+
+async def test_el_dueño_puede_llegar_a_cobrar_sin_tocar_consola(superadmin, client):
+    """El recorrido completo de un cliente recién creado."""
+    cab = await _entrar_plataforma(client, superadmin)
+    slug = f"completo-{uuid.uuid4().hex[:8]}"
+    creado = (await client.post(
+        "/api/v1/admin/tenants", headers=cab, json=_cliente(slug)
+    )).json()
+
+    token = await entrar(client, slug, f"admin-{slug}@prueba.com.co", "contrasenalarga1")
+    cabt = cabecera(token)
+
+    tipos = (await client.get(f"/api/v1/t/{slug}/tipos-vehiculo", headers=cabt)).json()
+    sedes = (await client.get(f"/api/v1/t/{slug}/sedes", headers=cabt)).json()
+
+    # Crea su primera tarifa poniendo un precio por tipo.
+    plan = (await client.post(
+        f"/api/v1/t/{slug}/planes", headers=cabt,
+        json={
+            "codigo": "general", "nombre": "Tarifa general",
+            "reglas": [
+                {
+                    "codigo": f"{t['codigo']}-general", "vehicle_type_id": t["id"],
+                    "modo": "por_bloque", "precio_bloque": "3000", "bloque_minutos": 60,
+                }
+                for t in tipos
+            ],
+        },
+    )).json()
+    activado = await client.post(
+        f"/api/v1/t/{slug}/planes/{plan['id']}/activar", headers=cabt
+    )
+    assert activado.status_code == 200
+
+    # Y ya puede registrar un ingreso.
+    carro = next(t for t in tipos if t["codigo"] == "carro")
+    ingreso = await client.post(
+        f"/api/v1/t/{slug}/tickets", headers=cabt,
+        json={"parking_lot_id": sedes[0]["id"], "vehicle_type_id": carro["id"],
+              "placa": "NEW001"},
+    )
+    assert ingreso.status_code == 201
+
+    async with system_scope() as session:
+        await session.delete(await session.get(Tenant, uuid.UUID(creado["id"])))
+        u = await session.scalar(
+            select(User).where(User.email == f"admin-{slug}@prueba.com.co")
+        )
+        if u:
+            await session.delete(u)
