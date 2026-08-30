@@ -1,0 +1,79 @@
+---
+import Base from '../../../layouts/Base.astro';
+import CabeceraPlataforma from '../../../components/CabeceraPlataforma.astro';
+import MiembrosCliente from '../../../components/MiembrosCliente';
+import { llamarAdmin } from '../../../lib/api';
+
+const { id } = Astro.params;
+
+const perfilRes = await llamarAdmin(Astro.cookies, '/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect('/admin/login');
+const admin = await perfilRes.json();
+
+const tenantRes = await llamarAdmin(Astro.cookies, `/tenants/${id}`);
+if (!tenantRes || tenantRes.status === 404) {
+  return new Response('No existe ese cliente', { status: 404 });
+}
+const tenant = await tenantRes.json();
+
+const miembrosRes = await llamarAdmin(Astro.cookies, `/tenants/${id}/usuarios`);
+const miembros = miembrosRes?.ok ? await miembrosRes.json() : [];
+
+const DATOS = [
+  ['Identificador', tenant.slug],
+  ['Razón social', tenant.razon_social ?? '—'],
+  ['NIT', tenant.nit ?? '—'],
+  ['Zona horaria', tenant.timezone],
+  ['Moneda', tenant.currency],
+  ['Creado', new Date(tenant.created_at).toLocaleDateString('es-CO')],
+];
+---
+<Base titulo={tenant.nombre} anchura="panel">
+  <CabeceraPlataforma admin={admin} activo="clientes" />
+
+  <main class="flex-1 space-y-8 px-6 py-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <a href="/admin" class="text-zp-caption font-bold underline underline-offset-4">
+          ← Clientes
+        </a>
+        <h1 class="mt-2 text-zp-2xl font-extrabold">{tenant.nombre}</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class:list={[
+          'rounded-zp border-2 border-outline px-3 py-1 text-zp-caption font-bold uppercase tracking-wide',
+          tenant.status === 'activo'
+            ? 'bg-primary text-on-primary'
+            : 'bg-surface-container-high text-on-surface-variant',
+        ]}>
+          {tenant.status}
+        </span>
+        <a
+          href={`/t/${tenant.slug}`}
+          class="rounded-zp border-2 border-outline bg-surface-container-lowest px-4 py-2
+                 text-zp-caption font-bold uppercase tracking-wide"
+        >
+          Ver su parqueadero →
+        </a>
+      </div>
+    </div>
+
+    <section>
+      <dl class="grid gap-px overflow-hidden rounded-zp border-2 border-outline
+                 bg-outline-variant sm:grid-cols-3">
+        {DATOS.map(([termino, valor]) => (
+          <div class="bg-surface-container-lowest px-4 py-3">
+            <dt class="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
+              {termino}
+            </dt>
+            <dd class="mt-0.5 text-zp-body">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <section>
+      <MiembrosCliente tenantId={tenant.id} iniciales={miembros} client:load />
+    </section>
+  </main>
+</Base>

@@ -10,7 +10,14 @@
  */
 import type { AstroCookies } from 'astro';
 
-import { borrarSesion, guardarSesion, leerSesion } from './session';
+import {
+  borrarSesion,
+  borrarSesionAdmin,
+  guardarSesion,
+  guardarSesionAdmin,
+  leerSesion,
+  leerSesionAdmin,
+} from './session';
 
 const INTERNAL_BASE = process.env.INTERNAL_API_BASE_URL ?? 'http://api:8000';
 
@@ -102,4 +109,56 @@ export async function llamarApi(
 
   res = await apiFetch(ruta, conToken(nuevo));
   return res;
+}
+
+
+// ── Plataforma ───────────────────────────────────────────────────────────
+
+/** Rota el refresh de plataforma y deja las cookies al día. */
+export async function renovarSesionAdmin(
+  cookies: AstroCookies,
+  refresh: string,
+): Promise<string | null> {
+  const res = await apiFetch('/api/v1/admin/auth/refresh', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refresh }),
+  });
+
+  if (!res.ok) {
+    borrarSesionAdmin(cookies);
+    return null;
+  }
+
+  const datos = await res.json();
+  guardarSesionAdmin(cookies, {
+    access: datos.access_token,
+    refresh: datos.refresh_token,
+    refreshExpiraEn: new Date(datos.refresh_expires_at),
+  });
+  return datos.access_token as string;
+}
+
+/** Petición autenticada al panel de plataforma, con renovación automática. */
+export async function llamarAdmin(
+  cookies: AstroCookies,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response | null> {
+  const sesion = leerSesionAdmin(cookies);
+  if (!sesion) return null;
+
+  const ruta = `/api/v1/admin${path}`;
+  const conToken = (token: string) => ({
+    ...init,
+    headers: { ...(init.headers ?? {}), authorization: `Bearer ${token}` },
+  });
+
+  let res = await apiFetch(ruta, conToken(sesion.access));
+  if (res.status !== 401) return res;
+
+  const nuevo = await renovarSesionAdmin(cookies, sesion.refresh);
+  if (!nuevo) return null;
+
+  return apiFetch(ruta, conToken(nuevo));
 }

@@ -94,6 +94,20 @@ button, a[role="button"], input, select {
   outline-offset: 2px;
 }
 
+/* ── Panel de plataforma ────────────────────────────────────────────────
+   Los 56px de alto vienen de operar con una mano y con guantes en la
+   caseta. En un escritorio con ratón esa razón no aplica, y a esa altura
+   una tabla de clientes no cabe en pantalla. Aquí se baja a 40px, que
+   sigue por encima del mínimo táctil recomendado por si alguien entra
+   desde una tablet.                                                       */
+
+.panel-admin button,
+.panel-admin a[role="button"],
+.panel-admin input,
+.panel-admin select {
+  min-height: 40px;
+}
+
 /* ── Placa colombiana ───────────────────────────────────────────────────
    Fondo blanco, borde negro grueso y tipografía de alto impacto. Es el
    dato que el operario compara contra el vehículo que tiene delante, así

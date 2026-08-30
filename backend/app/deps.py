@@ -16,8 +16,9 @@ from app.core.tenancy import (
     cargar_tenant,
     slug_desde_peticion,
 )
-from app.db.session import tenant_scope
+from app.db.session import system_scope, tenant_scope
 from app.models.tenant import Tenant
+from app.models.user import User
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -109,6 +110,60 @@ async def obtener_identidad(
 
 
 IdentidadDep = Annotated[Identidad, Depends(obtener_identidad)]
+
+
+# ── Administración de plataforma ─────────────────────────────────────────
+
+@dataclass(slots=True)
+class AdminPlataforma:
+    user_id: uuid.UUID
+    email: str
+    nombre: str
+
+
+async def obtener_sesion_sistema() -> AsyncGenerator[AsyncSession, None]:
+    """Sesión por encima de RLS. Solo para las rutas de plataforma."""
+    async with system_scope() as session:
+        yield session
+
+
+SesionSistemaDep = Annotated[AsyncSession, Depends(obtener_sesion_sistema)]
+
+
+async def obtener_admin_plataforma(
+    session: SesionSistemaDep,
+    credenciales: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> AdminPlataforma:
+    """Exige un token de plataforma y **vuelve a comprobar la marca en la
+    base**, no solo en el token.
+
+    El token vive quince minutos. Quitarle la administración a alguien no
+    debería tardar quince minutos en surtir efecto cuando lo que está en
+    juego es ver los datos de todos los clientes.
+    """
+    if credenciales is None:
+        raise _credenciales_invalidas("Falta el token de acceso")
+
+    try:
+        payload = leer_token_de_acceso(credenciales.credentials)
+    except TokenInvalido as e:
+        raise _credenciales_invalidas(str(e)) from e
+
+    if not payload.get("plat") or payload.get("tid") is not None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Este token no administra la plataforma"
+        )
+
+    user = await session.get(User, uuid.UUID(payload["sub"]))
+    if user is None or not user.is_active or not user.is_platform_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "La cuenta ya no administra la plataforma"
+        )
+
+    return AdminPlataforma(user_id=user.id, email=user.email, nombre=user.nombre)
+
+
+AdminPlataformaDep = Annotated[AdminPlataforma, Depends(obtener_admin_plataforma)]
 
 
 # ── Permisos ─────────────────────────────────────────────────────────────

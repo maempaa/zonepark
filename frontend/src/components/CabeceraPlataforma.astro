@@ -1,0 +1,47 @@
+---
+import CerrarSesionAdmin from './CerrarSesionAdmin';
+import Logo from './Logo.astro';
+
+interface Props {
+  admin: { nombre: string; email: string };
+  activo?: 'clientes' | 'administradores';
+}
+const { admin, activo } = Astro.props;
+
+const SECCIONES = [
+  { clave: 'clientes', texto: 'Clientes', href: '/admin' },
+  { clave: 'administradores', texto: 'Administradores', href: '/admin/usuarios' },
+] as const;
+---
+<header class="border-b-2 border-outline px-6 py-4">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <Logo soloIsotipo alto={30} />
+      <span class="rounded-zp border-2 border-outline bg-secondary px-2.5 py-0.5
+                   text-zp-caption font-extrabold uppercase tracking-widest text-on-secondary">
+        Plataforma
+      </span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-zp-caption text-on-surface-variant">{admin.nombre}</span>
+      <CerrarSesionAdmin client:load />
+    </div>
+  </div>
+
+  <nav class="mt-4 flex gap-3">
+    {SECCIONES.map((s) => (
+      <a
+        href={s.href}
+        aria-current={activo === s.clave ? 'page' : undefined}
+        class:list={[
+          'rounded-zp border-2 border-outline px-4 py-2 text-zp-caption font-bold uppercase tracking-wide',
+          activo === s.clave
+            ? 'bg-primary text-on-primary'
+            : 'bg-surface-container-lowest active:bg-surface-container',
+        ]}
+      >
+        {s.texto}
+      </a>
+    ))}
+  </nav>
+</header>

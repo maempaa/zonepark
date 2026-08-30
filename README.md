@@ -44,6 +44,9 @@ de aparecer el día que entra el segundo cliente real.
 | central | `operario@central.com.co` | `central12345` (PIN `482913`) | Operario | S1 |
 | [norte](http://localhost:4321/t/norte) | `admin@norte.com.co` | `norte12345` | Administrador | Todas las sedes |
 
+Y para el [panel de plataforma](http://localhost:4321/admin):
+`super@zonepark.com.co` / `plataforma12345`.
+
 ## Tarifas
 
 Todo es parametrizable desde la base, sin desplegar nada: los tipos de
@@ -129,6 +132,34 @@ aparte, para que el dueño lo vea en vez de que desaparezca.
 Los reportes (`/t/{slug}/reportes`) agregan en SQL y agrupan por la hora de
 la sede: un turno que termina a la 1 de la mañana pertenece al día anterior
 para quien lo trabajó. Hay export CSV.
+
+## Panel de plataforma
+
+`/admin` es otra aplicación dentro de la misma: quien entra ahí no
+pertenece a ningún parqueadero, los crea. Tiene su propia sesión en
+cookies separadas, así que un administrador puede tener el panel abierto
+y a la vez entrar a un cliente para ver lo que ve él.
+
+Crear un cliente lo deja **listo para operar en un solo paso**: tenant,
+roles del sistema, primera sede y un administrador que puede entrar,
+todo en una transacción. Un cliente a medio crear no serviría de nada.
+
+Suspender un cliente corta el acceso de golpe: el rechazo ocurre al
+resolver el parqueadero, antes de mirar credenciales.
+
+Dos cosas que lo distinguen del resto de la aplicación:
+
+- **Corre por encima de RLS.** Es el único sitio donde eso está
+  justificado —crear un tenant es anterior a que el tenant exista— y por
+  eso cada acción queda en la bitácora.
+- **La marca de administrador se comprueba contra la base en cada
+  petición**, no contra el token. El token dura quince minutos, y ver los
+  datos de todos los clientes quince minutos de más no es aceptable.
+
+El panel está pensado para escritorio: tablas en vez de tarjetas, ancho
+mayor y objetivos táctiles de 40px en vez de los 56px de la caseta —esa
+medida viene de operar con una mano y con guantes, y en un escritorio con
+ratón no aplica.
 
 ## Interfaz
 
@@ -229,8 +260,9 @@ para que construir una no sobrescriba la otra.
 - **Fase 2** — catálogos parametrizables, motor de tarifas y simulador.
 - **Fase 3** — ingreso, búsqueda por placa, cobro idempotente y recibo.
 - **Fase 4** — turnos de caja, arqueo a ciegas y reportes.
+- **Plataforma** — panel de superadministrador: clientes, usuarios y suspensión.
 
-220 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
+253 pruebas, la mayoría contra Postgres real. Incluyen el criterio de
 aceptación de la fase 1 —un tenant no lee ni un registro de otro ni
 forzando identificadores—, la batería de tarifas del motor, el cobro
 concurrente y la aritmética del arqueo.

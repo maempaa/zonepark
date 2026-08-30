@@ -341,3 +341,101 @@ async def revocar_sesion(session: AsyncSession, *, refresh_crudo: str) -> None:
         .where(RefreshToken.token_hash == hash_refresh_token(refresh_crudo))
         .values(revoked_at=datetime.now(UTC))
     )
+
+
+# ── Administración de plataforma ─────────────────────────────────────────
+# El administrador de plataforma no pertenece a ningún tenant: crea
+# clientes, no opera parqueaderos. Por eso su sesión no lleva `tid` y su
+# token no carga permisos de tenant, solo la marca `plat`.
+#
+# Todo esto corre con `system_scope`, fuera de RLS, porque justamente
+# necesita ver por encima de los tenants. Es el único sitio del sistema
+# donde eso está justificado, y cada acción queda en la bitácora.
+
+
+class NoEsAdminDePlataforma(Exception):
+    def __init__(self) -> None:
+        super().__init__("Esta cuenta no administra la plataforma")
+
+
+async def login_plataforma(session: AsyncSession, *, email: str, password: str) -> User:
+    user = await session.scalar(select(User).where(User.email == email.lower()))
+
+    # Mismo mensaje que en el login de tenant: no se revela si el correo
+    # existe ni si existe pero no es administrador.
+    if user is None or not user.is_active:
+        raise CredencialesInvalidas()
+
+    _verificar_no_bloqueado(user)
+
+    if not verificar_secreto(password, user.password_hash):
+        await _registrar_fallo(session, user)
+        raise CredencialesInvalidas()
+
+    if not user.is_platform_admin:
+        raise CredencialesInvalidas()
+
+    await _registrar_exito(session, user, password)
+    return user
+
+
+async def emitir_tokens_plataforma(
+    session: AsyncSession, *, user: User, reemplaza: RefreshToken | None = None
+) -> tuple[str, datetime, str, datetime]:
+    access, expira = crear_token_de_acceso(
+        user_id=user.id,
+        tenant_id=None,
+        membership_id=None,
+        permisos=[],
+        sedes=None,
+        es_admin_plataforma=True,
+    )
+
+    crudo, token_hash = generar_refresh_token()
+    refresh_expira = datetime.now(UTC) + timedelta(days=settings.refresh_token_days)
+    # tenant_id nulo: una fila así es invisible para cualquier sesión de
+    # tenant, solo la ve la sesión de sistema.
+    nuevo = RefreshToken(
+        tenant_id=None, user_id=user.id, token_hash=token_hash, expires_at=refresh_expira
+    )
+    session.add(nuevo)
+    await session.flush()
+    if reemplaza is not None:
+        reemplaza.replaced_by_id = nuevo.id
+
+    return access, expira, crudo, refresh_expira
+
+
+async def rotar_refresh_plataforma(
+    session: AsyncSession, *, refresh_crudo: str
+) -> tuple[User, RefreshToken]:
+    guardado = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(refresh_crudo),
+            RefreshToken.tenant_id.is_(None),
+        )
+    )
+    if guardado is None:
+        raise CredencialesInvalidas("Sesión inválida")
+
+    ahora = datetime.now(UTC)
+
+    # Reutilizar un token ya rotado es señal de robo: se corta la cadena.
+    if guardado.revoked_at is not None or guardado.replaced_by_id is not None:
+        await session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.user_id == guardado.user_id, RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=ahora)
+        )
+        await session.commit()
+        raise CredencialesInvalidas("La sesión fue revocada por seguridad")
+
+    if guardado.expires_at <= ahora:
+        raise CredencialesInvalidas("La sesión expiró")
+
+    user = await session.get(User, guardado.user_id)
+    if user is None or not user.is_active or not user.is_platform_admin:
+        raise CredencialesInvalidas("Sesión inválida")
+
+    guardado.revoked_at = ahora
+    return user, guardado

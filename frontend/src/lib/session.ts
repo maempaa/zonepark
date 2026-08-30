@@ -15,6 +15,12 @@ export const COOKIE_ACCESS = 'zp_access';
 export const COOKIE_REFRESH = 'zp_refresh';
 export const COOKIE_TENANT = 'zp_tenant';
 
+// La sesión de plataforma va en sus propias cookies, no reutiliza las de
+// tenant. Así un administrador puede tener abierto el panel y, a la vez,
+// entrar a un parqueadero concreto para ver lo que ve su cliente.
+export const COOKIE_ADMIN_ACCESS = 'zp_admin_access';
+export const COOKIE_ADMIN_REFRESH = 'zp_admin_refresh';
+
 const EN_PRODUCCION = process.env.APP_ENV === 'production';
 
 const BASE = {
@@ -54,6 +60,39 @@ export function guardarSesion(
 
 export function borrarSesion(cookies: AstroCookies): void {
   for (const nombre of [COOKIE_ACCESS, COOKIE_REFRESH, COOKIE_TENANT]) {
+    cookies.delete(nombre, { path: '/' });
+  }
+}
+
+
+// ── Plataforma ───────────────────────────────────────────────────────────
+
+export interface SesionAdmin {
+  access: string;
+  refresh: string;
+}
+
+export function leerSesionAdmin(cookies: AstroCookies): SesionAdmin | null {
+  const access = cookies.get(COOKIE_ADMIN_ACCESS)?.value;
+  const refresh = cookies.get(COOKIE_ADMIN_REFRESH)?.value;
+  if (!access || !refresh) return null;
+  return { access, refresh };
+}
+
+export function guardarSesionAdmin(
+  cookies: AstroCookies,
+  datos: { access: string; refresh: string; refreshExpiraEn: Date },
+): void {
+  const segundos = Math.max(
+    60,
+    Math.floor((datos.refreshExpiraEn.getTime() - Date.now()) / 1000),
+  );
+  cookies.set(COOKIE_ADMIN_ACCESS, datos.access, { ...BASE, maxAge: segundos });
+  cookies.set(COOKIE_ADMIN_REFRESH, datos.refresh, { ...BASE, maxAge: segundos });
+}
+
+export function borrarSesionAdmin(cookies: AstroCookies): void {
+  for (const nombre of [COOKIE_ADMIN_ACCESS, COOKIE_ADMIN_REFRESH]) {
     cookies.delete(nombre, { path: '/' });
   }
 }

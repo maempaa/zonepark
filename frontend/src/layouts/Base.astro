@@ -3,10 +3,21 @@ import '../styles/global.css';
 
 interface Props {
   titulo: string;
-  /** Las pantallas de configuración y reportes se usan en tablet o escritorio. */
-  ancho?: boolean;
+  /**
+   * Ancho del contenido:
+   * - `movil`  la caseta, una mano, pantalla pequeña (por defecto)
+   * - `tablet` configuración y reportes, sentado
+   * - `panel`  administración de plataforma, escritorio con ratón
+   */
+  anchura?: 'movil' | 'tablet' | 'panel';
 }
-const { titulo, ancho = false } = Astro.props;
+const { titulo, anchura = 'movil' } = Astro.props;
+
+const ANCHOS = {
+  movil: 'max-w-md',
+  tablet: 'max-w-3xl',
+  panel: 'max-w-6xl',
+} as const;
 ---
 <html lang="es">
   <head>
@@ -26,8 +37,13 @@ const { titulo, ancho = false } = Astro.props;
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
   </head>
-  <body class="min-h-dvh bg-surface font-sans text-on-surface antialiased">
-    <div class:list={["mx-auto flex min-h-dvh w-full flex-col", ancho ? "max-w-3xl" : "max-w-md"]}>
+  <body
+    class:list={[
+      "min-h-dvh bg-surface font-sans text-on-surface antialiased",
+      anchura === "panel" && "panel-admin",
+    ]}
+  >
+    <div class:list={["mx-auto flex min-h-dvh w-full flex-col", ANCHOS[anchura]]}>
       <slot />
     </div>
   </body>

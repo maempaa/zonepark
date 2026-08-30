@@ -1,0 +1,19 @@
+---
+import Base from '../../layouts/Base.astro';
+import CabeceraPlataforma from '../../components/CabeceraPlataforma.astro';
+import PanelClientes from '../../components/PanelClientes';
+import { llamarAdmin } from '../../lib/api';
+
+const perfilRes = await llamarAdmin(Astro.cookies, '/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect('/admin/login');
+const admin = await perfilRes.json();
+
+const clientesRes = await llamarAdmin(Astro.cookies, '/tenants');
+const clientes = clientesRes?.ok ? await clientesRes.json() : [];
+---
+<Base titulo="Clientes" anchura="panel">
+  <CabeceraPlataforma admin={admin} activo="clientes" />
+  <main class="flex-1 px-6 py-6">
+    <PanelClientes iniciales={clientes} client:load />
+  </main>
+</Base>

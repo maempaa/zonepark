@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
     auth,
     caja,
     catalogo,
@@ -16,6 +17,10 @@ from app.api.v1 import (
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(meta.router)
+
+# Plataforma: fuera del prefijo de tenant, porque quien la usa no pertenece
+# a ninguno.
+api_router.include_router(admin.router)
 
 # D1: el tenant viaja en la ruta. Todo lo que cuelga de aquí resuelve el
 # tenant antes de tocar la base y corre bajo RLS.

@@ -1,0 +1,28 @@
+---
+import Base from '../../layouts/Base.astro';
+import IngresoPlataforma from '../../components/IngresoPlataforma';
+import Logo from '../../components/Logo.astro';
+import { leerSesionAdmin } from '../../lib/session';
+
+if (leerSesionAdmin(Astro.cookies)) return Astro.redirect('/admin');
+---
+<Base titulo="Plataforma">
+  <main class="flex flex-1 flex-col justify-center px-6 py-10">
+    <header class="mb-8 text-center">
+      <Logo alto={52} class="mx-auto" />
+      <p class="mt-6 inline-block rounded-zp border-2 border-outline bg-secondary px-3 py-1
+                text-zp-caption font-extrabold uppercase tracking-[0.2em] text-on-secondary">
+        Plataforma
+      </p>
+      <p class="mt-3 text-zp-body text-on-surface-variant">
+        Administración de clientes
+      </p>
+    </header>
+
+    <IngresoPlataforma client:load />
+
+    <p class="mt-8 text-center text-zp-caption text-on-surface-variant">
+      ¿Buscas tu parqueadero? <a href="/" class="font-bold underline underline-offset-4">Entra por aquí</a>
+    </p>
+  </main>
+</Base>

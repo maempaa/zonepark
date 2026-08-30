@@ -19,6 +19,7 @@ from app.models.catalogo import Holiday, ServiceItem, VehicleType
 from app.models.parking_lot import DevicePolicy
 from app.models.tarifa import EstadoPlan, RatePlan, RateRule
 from app.models.tenant import Tenant
+from app.models.user import User
 from app.services.tenants import (
     crear_miembro,
     crear_sede,
@@ -175,10 +176,28 @@ DEMO = [
 ]
 
 
+SUPERADMIN = ("super@zonepark.com.co", "Sara Superadmin", "plataforma12345")
+
+
 async def seed() -> None:
     async with system_scope() as session:
         total = await sembrar_permisos(session)
         print(f"Permisos sincronizados: {total}")
+
+        # Administrador de plataforma: crea clientes, no opera parqueaderos.
+        email, nombre, clave = SUPERADMIN
+        from app.services.plataforma import crear_admin_de_plataforma
+
+        # Comprueba la marca, no solo que exista la fila: si alguien se la
+        # quitó, volver a correr el seed tiene que devolver el acceso.
+        ya = await session.scalar(select(User).where(User.email == email))
+        if ya is None or not ya.is_platform_admin:
+            await crear_admin_de_plataforma(
+                session, email=email, nombre=nombre, password=clave
+            )
+            print(f"Administrador de plataforma: {email} clave: {clave}")
+        else:
+            print(f"Administrador de plataforma existente: {email}")
 
         for definicion in DEMO:
             tenant = await session.scalar(
@@ -243,7 +262,9 @@ async def seed() -> None:
             print("  tarifas: carro $3.000/h (noche $2.000, tope $22.000), "
                   "moto $900 media hora, bici $2.000 plena")
 
-    print("\nListo. Entra en http://localhost:4321/t/central")
+    print("\nListo.")
+    print("  Operación : http://localhost:4321/t/central")
+    print("  Plataforma: http://localhost:4321/admin")
 
 
 if __name__ == "__main__":

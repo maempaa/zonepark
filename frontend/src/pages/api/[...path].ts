@@ -7,8 +7,8 @@
  */
 import type { APIRoute } from 'astro';
 
-import { renovarSesion } from '../../lib/api';
-import { leerSesion } from '../../lib/session';
+import { renovarSesion, renovarSesionAdmin } from '../../lib/api';
+import { leerSesion, leerSesionAdmin } from '../../lib/session';
 
 export const prerender = false;
 
@@ -41,11 +41,21 @@ const handler: APIRoute = async ({ params, request, cookies }) => {
     if (!OMITIR.has(clave.toLowerCase())) headers.set(clave, valor);
   });
 
-  // Solo se adjunta el token si la sesión es de ese mismo parqueadero.
-  const sesion = leerSesion(cookies);
-  const tenant = tenantDeLaRuta(path);
-  const autenticada = sesion && tenant && sesion.tenant === tenant;
-  if (autenticada) headers.set('authorization', `Bearer ${sesion.access}`);
+  // Las rutas de plataforma llevan su propia sesión; las de tenant, la
+  // suya, y solo si el token es de ese mismo parqueadero.
+  const esPlataforma = path.startsWith('v1/admin/') || path === 'v1/admin';
+  const sesion = esPlataforma ? null : leerSesion(cookies);
+  const sesionAdmin = esPlataforma ? leerSesionAdmin(cookies) : null;
+  const tenant = esPlataforma ? null : tenantDeLaRuta(path);
+
+  const autenticada = esPlataforma
+    ? sesionAdmin !== null
+    : Boolean(sesion && tenant && sesion.tenant === tenant);
+
+  if (autenticada) {
+    const token = esPlataforma ? sesionAdmin!.access : sesion!.access;
+    headers.set('authorization', `Bearer ${token}`);
+  }
 
   const cuerpo = ['GET', 'HEAD'].includes(request.method)
     ? undefined
@@ -65,7 +75,9 @@ const handler: APIRoute = async ({ params, request, cookies }) => {
 
     // Token vencido: se rota y se reintenta una vez.
     if (res.status === 401 && autenticada) {
-      const nuevo = await renovarSesion(cookies, tenant, sesion.refresh);
+      const nuevo = esPlataforma
+        ? await renovarSesionAdmin(cookies, sesionAdmin!.refresh)
+        : await renovarSesion(cookies, tenant!, sesion!.refresh);
       if (nuevo) {
         headers.set('authorization', `Bearer ${nuevo}`);
         res = await enviar(headers);
