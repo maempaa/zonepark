@@ -7,8 +7,31 @@ help:  ## Muestra esta ayuda
 env:  ## Crea .env a partir de .env.example si no existe
 	@test -f .env || (cp .env.example .env && echo "  .env creado")
 
-up: env  ## Levanta el stack en desarrollo
+up: env  ## Levanta el stack en DESARROLLO (recarga en caliente)
 	$(COMPOSE) up -d --build
+
+# ── Producción ──────────────────────────────────────────────────────────
+PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
+
+red:  ## Crea la red compartida con el túnel de Cloudflare
+	@docker network create zonepark-publica 2>/dev/null && echo "  creada" || echo "  ya existía"
+
+produccion: red  ## Rota los secretos de desarrollo y deja .env listo para producción
+	./scripts/preparar-produccion.sh
+
+deploy: red  ## Publica en producción: construye, migra y levanta
+	$(PROD) up -d --build
+	@echo
+	@$(PROD) ps
+
+respaldo:  ## Copia comprimida de la base de datos
+	./scripts/respaldo.sh
+
+prod-logs:  ## Sigue los logs de producción
+	$(PROD) logs -f
+
+prod-ps:  ## Estado de los servicios de producción
+	$(PROD) ps
 
 down:  ## Baja el stack
 	$(COMPOSE) down
@@ -43,4 +66,5 @@ shell:  ## Abre una shell en el contenedor de la API
 psql:  ## Abre psql contra la base de datos
 	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-zonepark} -d $${POSTGRES_DB:-zonepark}
 
-.PHONY: help env up down reset logs ps migrate revision seed test lint shell psql
+.PHONY: help env up down reset logs ps migrate revision seed test lint shell psql \
+	red produccion deploy respaldo prod-logs prod-ps
