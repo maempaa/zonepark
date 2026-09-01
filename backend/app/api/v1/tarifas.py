@@ -76,6 +76,7 @@ def _fila_de_regla(tenant_id: uuid.UUID, plan_id: uuid.UUID, datos: ReglaIn) -> 
         rate_plan_id=plan_id,
         vehicle_type_id=datos.vehicle_type_id,
         codigo=datos.codigo,
+        nombre=datos.nombre,
         modo=datos.modo,
         precio_minuto=datos.precio_minuto,
         precio_bloque=datos.precio_bloque,

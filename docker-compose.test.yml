@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════
+#  Entorno de pruebas desechable.
+#
+#      make test
+#
+#  Existe porque este servidor es también el de producción, y las pruebas
+#  crean y borran tenants, usuarios y tarifas. Correrlas contra la base
+#  real sería destruir datos de clientes: ya pasó una vez con la marca de
+#  administrador de plataforma.
+#
+#  La base va en memoria y muere con el contenedor, así que no deja nada
+#  ni ocupa disco.
+# ═══════════════════════════════════════════════════════════════════════
+
+name: zonepark-pruebas
+
+services:
+  db-pruebas:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zonepark
+      POSTGRES_PASSWORD: pruebas
+      POSTGRES_DB: zonepark
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zonepark -d zonepark"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  pruebas:
+    build:
+      context: ./backend
+      target: dev
+    environment:
+      APP_ENV: development
+      API_PORT: "8000"
+      DATABASE_URL: postgresql+asyncpg://zonepark:pruebas@db-pruebas:5432/zonepark
+      JWT_SECRET: pruebas_no_es_un_secreto_real
+      CORS_ORIGINS: ""
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db-pruebas:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && pytest -q"]

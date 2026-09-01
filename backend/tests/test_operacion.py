@@ -8,6 +8,7 @@ permisos, alcance—, no cifras que dependan del reloj.
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from decimal import Decimal as _D
 
 import pytest
 from sqlalchemy import select
@@ -15,10 +16,14 @@ from sqlalchemy import select
 from app.db.session import tenant_scope
 from app.models.catalogo import ServiceItem, VehicleType
 from app.models.parking_lot import ParkingLot
-from app.models.tarifa import RateRule
+from app.models.tarifa import RatePlan, RateRule
+from app.models.tarifa import RateRule as _RateRule
 from app.models.tenant import Tenant
 from app.models.ticket import EstadoTicket, MetodoPago, Payment, Ticket
+from app.models.user import Membership
 from app.services.tickets import (
+    MotivoRequerido,
+    OpcionDesconocida,
     PagoInsuficiente,
     PlacaConTicketAbierto,
     PlacaInvalida,
@@ -30,6 +35,7 @@ from app.services.tickets import (
     cerrar_ticket,
     cotizar_ticket,
     normalizar_placa,
+    opciones_de_cobro,
 )
 
 # Un lunes a las 8 de la mañana en Bogotá: dentro de la franja diurna.
@@ -417,3 +423,232 @@ async def test_el_consecutivo_es_independiente_por_tenant(dos_tenants):
 
     assert de_a.numero == 1 and de_b.numero == 1
     assert de_a.id != de_b.id
+
+
+# ── Opciones de cobro y ajuste manual ────────────────────────────────────
+# Un parqueadero no cobra siempre igual: al mismo carro se le puede aplicar
+# la tarifa por hora, una plena o un convenio, y quien cobra elige con el
+# cliente delante.
+
+
+
+
+async def _con_opcion_plena(session, t, precio="12000.00"):
+    """Añade una tarifa plena al plan activo, como haría el administrador."""
+    plan = await session.scalar(select(RatePlan).where(RatePlan.codigo == "general"))
+    tipo = await session.scalar(select(VehicleType).where(VehicleType.codigo == "carro"))
+    session.add(
+        _RateRule(
+            tenant_id=t.id, rate_plan_id=plan.id, vehicle_type_id=tipo.id,
+            codigo="carro-plena", nombre="Todo el día",
+            modo="plena", precio_plena=_D(precio),
+        )
+    )
+    await session.flush()
+
+
+async def test_se_ofrecen_todas_las_formas_de_cobro(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        await _con_opcion_plena(session, a)
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        opciones = await opciones_de_cobro(
+            session, tenant=tenant, ticket=ticket, ahora=ENTRADA + timedelta(minutes=137)
+        )
+
+    nombres = {o.nombre for o in opciones}
+    assert "Todo el día" in nombres, "la tarifa plena debería ofrecerse"
+    assert sum(1 for o in opciones if o.recomendada) == 1, "solo una recomendada"
+    assert opciones[0].recomendada, "la recomendada va primero"
+    # La automática cobra tres horas; la plena, su precio único.
+    por_nombre = {o.nombre: o.cotizacion.total for o in opciones}
+    assert por_nombre["Todo el día"] == _D("12000.00")
+
+
+async def test_el_operario_elige_una_opcion_distinta(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        await _con_opcion_plena(session, a)
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+
+        _, pago, _ = await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+            opcion="carro-plena",
+        )
+
+    assert pago.monto == _D("12000.00")
+    assert pago.regla_aplicada == "carro-plena"
+    assert pago.ajuste_manual is False
+
+
+async def test_una_opcion_inexistente_se_rechaza(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        with pytest.raises(OpcionDesconocida):
+            await cerrar_ticket(
+                session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+                ahora=ENTRADA + timedelta(hours=2), membership_id=None,
+                opcion="tarifa-inventada",
+            )
+
+
+async def test_un_monto_a_mano_exige_motivo(dos_tenants):
+    """Sin explicación no hay nada que auditar después."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        with pytest.raises(MotivoRequerido):
+            await cerrar_ticket(
+                session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+                ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+                monto_manual=_D("5000.00"),
+            )
+
+
+async def test_el_monto_a_mano_guarda_lo_que_el_sistema_habia_calculado(dos_tenants):
+    """Sin ese dato, un ajuste sería indistinguible de un cobro normal."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        _, pago, _ = await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+            monto_manual=_D("5000.00"), motivo_ajuste="Cliente frecuente",
+        )
+
+    assert pago.monto == _D("5000.00")
+    assert pago.monto_calculado == _D("9000.00")
+    assert pago.ajuste_manual is True
+    assert pago.motivo_ajuste == "Cliente frecuente"
+
+
+async def test_el_desglose_sigue_sumando_el_total_con_ajuste(dos_tenants):
+    """Un recibo que no cuadra no sirve de nada."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        ticket_id = ticket.id
+        await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket_id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+            monto_manual=_D("5000.00"), motivo_ajuste="Descuento acordado",
+        )
+        await session.refresh(ticket)
+        cargos = [(c.concepto, c.monto) for c in ticket.cargos]
+
+    assert sum(m for _, m in cargos) == _D("5000.00")
+    assert any("Ajuste manual" in c for c, _ in cargos)
+
+
+async def test_cobrar_de_mas_tambien_se_registra_como_ajuste(dos_tenants):
+    """El ticket perdido se cobra por encima de la tarifa, y debe verse."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        _, pago, _ = await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+            monto_manual=_D("24000.00"), motivo_ajuste="Ticket perdido",
+        )
+
+    assert pago.monto == _D("24000.00")
+    assert pago.monto_calculado == _D("9000.00")
+    assert pago.ajuste_manual is True
+
+
+async def test_sin_elegir_nada_se_cobra_la_recomendada(dos_tenants):
+    """Lo de siempre tiene que seguir funcionando igual."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        _, pago, _ = await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=None,
+        )
+
+    assert pago.monto == _D("9000.00")
+    assert pago.ajuste_manual is False
+    assert pago.monto_calculado == _D("9000.00")
+
+
+async def test_el_ajuste_manual_entra_completo_en_el_arqueo(dos_tenants):
+    """La caja tiene que cuadrar con lo que de verdad entró al cajón."""
+    from app.services.caja import abrir_turno, calcular_arqueo
+
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, sede, _ = await _contexto(session, a)
+        membresia = await session.scalar(
+            select(Membership).where(Membership.tenant_id == a.id).limit(1)
+        )
+        turno = await abrir_turno(
+            session, tenant=tenant, sede=sede, membership_id=membresia.id,
+            base_inicial=_D("0"), ahora=ENTRADA,
+        )
+        ticket = await _abrir(session, a)
+        await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, metodo=MetodoPago.EFECTIVO,
+            ahora=ENTRADA + timedelta(minutes=137), membership_id=membresia.id,
+            monto_manual=_D("5000.00"), motivo_ajuste="Descuento",
+        )
+        arqueo = await calcular_arqueo(session, turno=turno)
+
+    assert arqueo.efectivo_cobrado == _D("5000.00"), \
+        "el arqueo debe contar lo cobrado, no lo calculado"
+
+
+async def test_las_tarifas_por_franja_no_se_ofrecen_como_opcion(dos_tenants):
+    """La nocturna no es una elección de quien cobra: la aplica sola la
+    automática. Ofrecerla suelta mostraría dos opciones idénticas."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        opciones = await opciones_de_cobro(
+            session, tenant=tenant, ticket=ticket, ahora=ENTRADA + timedelta(minutes=137)
+        )
+
+    # El plan de prueba tiene carro-general y carro-nocturna: una sola opción.
+    assert len(opciones) == 1
+    assert opciones[0].recomendada
+
+
+async def test_no_se_repiten_opciones_indistinguibles(dos_tenants):
+    """Dos opciones con el mismo nombre y el mismo precio son una pregunta
+    sin respuesta para quien cobra."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        await _con_opcion_plena(session, a, precio="12000.00")
+        await _con_opcion_plena_extra(session, a, precio="12000.00")
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        opciones = await opciones_de_cobro(
+            session, tenant=tenant, ticket=ticket, ahora=ENTRADA + timedelta(minutes=137)
+        )
+
+    etiquetas = [(o.nombre, o.cotizacion.total) for o in opciones]
+    assert len(etiquetas) == len(set(etiquetas)), f"opciones repetidas: {etiquetas}"
+
+
+async def _con_opcion_plena_extra(session, t, precio):
+    """Otra plena con el mismo nombre y precio, para probar el deduplicado."""
+    plan = await session.scalar(select(RatePlan).where(RatePlan.codigo == "general"))
+    tipo = await session.scalar(select(VehicleType).where(VehicleType.codigo == "carro"))
+    session.add(
+        _RateRule(
+            tenant_id=t.id, rate_plan_id=plan.id, vehicle_type_id=tipo.id,
+            codigo="carro-plena-2", nombre="Todo el día",
+            modo="plena", precio_plena=_D(precio),
+        )
+    )
+    await session.flush()

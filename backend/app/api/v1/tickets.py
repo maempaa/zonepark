@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -16,6 +17,7 @@ from app.schemas.tarifa import CotizacionOut
 from app.schemas.ticket import (
     AnulacionIn,
     CobroIn,
+    CotizacionConOpcionesOut,
     IngresoIn,
     ItemIn,
     ReciboOut,
@@ -25,6 +27,8 @@ from app.schemas.ticket import (
 from app.services import audit
 from app.services.tarifas import SinPlanVigente, SinTarifaParaElVehiculo
 from app.services.tickets import (
+    MotivoRequerido,
+    OpcionDesconocida,
     PagoInsuficiente,
     PlacaConTicketAbierto,
     PlacaInvalida,
@@ -34,7 +38,7 @@ from app.services.tickets import (
     anular_ticket,
     buscar_tickets,
     cerrar_ticket,
-    cotizar_ticket,
+    opciones_de_cobro,
 )
 
 router = APIRouter(prefix="/tickets", tags=["operación"])
@@ -229,7 +233,7 @@ async def añadir_item(
 
 # ── Cotizar sin cerrar ───────────────────────────────────────────────────
 
-@router.get("/{ticket_id}/cotizar", response_model=CotizacionOut)
+@router.get("/{ticket_id}/cotizar", response_model=CotizacionConOpcionesOut)
 async def cotizar(
     ticket_id: uuid.UUID,
     tenant: TenantDep,
@@ -251,13 +255,27 @@ async def cotizar(
         momento = momento.replace(tzinfo=UTC)
 
     try:
-        cotizacion = await cotizar_ticket(session, tenant=tenant, ticket=ticket, ahora=momento)
+        opciones = await opciones_de_cobro(
+            session, tenant=tenant, ticket=ticket, ahora=momento
+        )
     except TicketNoOperable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
 
-    return _cotizacion_out(cotizacion)
+    recomendada = opciones[0]
+    return CotizacionConOpcionesOut(
+        **_cotizacion_out(recomendada.cotizacion).model_dump(),
+        opciones=[
+            {
+                "codigo": o.codigo,
+                "nombre": o.nombre,
+                "recomendada": o.recomendada,
+                "cotizacion": _cotizacion_out(o.cotizacion),
+            }
+            for o in opciones
+        ],
+    )
 
 
 # ── Cobrar ───────────────────────────────────────────────────────────────
@@ -293,14 +311,33 @@ async def cobrar(
             recibido=datos.recibido,
             referencia=datos.referencia,
             idempotency_key=idempotency_key,
+            opcion=datos.opcion,
+            monto_manual=datos.monto_manual,
+            motivo_ajuste=datos.motivo_ajuste,
         )
-    except PagoInsuficiente as e:
+    except (PagoInsuficiente, OpcionDesconocida, MotivoRequerido) as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     except TicketNoOperable as e:
         raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
 
-    cotizacion = await cotizar_ticket(
-        session, tenant=tenant, ticket=ticket, ahora=ticket.salida_at
+    # El desglose sale de lo que quedó guardado en los cargos, no de
+    # recalcular: si hubo ajuste manual, recalcular daría otra cosa.
+    await session.refresh(ticket)
+    cotizacion = CotizacionOut(
+        minutos=int((ticket.salida_at - ticket.entrada_at).total_seconds() // 60),
+        minutos_facturables=int((ticket.salida_at - ticket.entrada_at).total_seconds() // 60),
+        lineas=[
+            {"concepto": c.concepto, "monto": c.monto, "detalle": c.detalle}
+            for c in ticket.cargos
+        ],
+        subtotal=pago.subtotal,
+        impuesto=pago.impuesto,
+        ajuste_redondeo=Decimal("0.00"),
+        total=pago.monto,
+        regla_aplicada=pago.regla_aplicada or "",
+        en_cortesia=pago.monto == 0,
+        tope_aplicado=False,
+        minimo_aplicado=False,
     )
 
     if not reintento:

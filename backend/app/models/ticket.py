@@ -26,6 +26,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -177,6 +178,17 @@ class Payment(UUIDPk, TenantScoped, Timestamps, Base):
     # Solo en efectivo: lo que entregó el cliente y el cambio devuelto.
     recibido: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     cambio: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+
+    # Con qué opción de cobro se calculó. Un parqueadero puede ofrecer
+    # varias —por hora, plena, por minuto— y el operario elige al cobrar.
+    regla_aplicada: Mapped[str | None] = mapped_column(String(48))
+
+    # Lo que el sistema calculó, aunque al final se cobrara otra cosa.
+    # Sin este dato, un monto puesto a mano sería indistinguible de uno
+    # calculado y no habría forma de auditar la diferencia.
+    monto_calculado: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    ajuste_manual: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    motivo_ajuste: Mapped[str | None] = mapped_column(String(300))
 
     referencia: Mapped[str | None] = mapped_column(String(64))
     idempotency_key: Mapped[str | None] = mapped_column(String(64))

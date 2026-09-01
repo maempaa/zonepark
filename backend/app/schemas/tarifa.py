@@ -49,6 +49,9 @@ class EscalonIn(BaseModel):
 
 class ReglaIn(BaseModel):
     codigo: str = Field(min_length=1, max_length=48)
+    # Cómo se llama esta opción para quien cobra: "Por hora", "Todo el
+    # día", "Convenio". Nulo = se deduce del modo.
+    nombre: str | None = Field(default=None, max_length=80)
     vehicle_type_id: uuid.UUID
     modo: ModoCobro
 
@@ -138,6 +141,7 @@ class ReglaOut(BaseModel):
 
     id: uuid.UUID
     codigo: str
+    nombre: str | None
     vehicle_type_id: uuid.UUID
     modo: ModoCobro
     precio_minuto: Decimal

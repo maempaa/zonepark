@@ -99,6 +99,9 @@ class RateRule(UUIDPk, TenantScoped, Timestamps, Base):
 
     # Identifica la regla en el desglose que ve el operario.
     codigo: Mapped[str] = mapped_column(String(48), nullable=False)
+    # Cómo se llama esta opción para quien cobra: "Por hora", "Tarifa de
+    # todo el día", "Convenio centro comercial". Nulo = se deduce del modo.
+    nombre: Mapped[str | None] = mapped_column(String(80))
 
     modo: Mapped[ModoCobro] = mapped_column(enum_column(ModoCobro, 32), nullable=False)
 

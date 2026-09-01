@@ -130,6 +130,8 @@ class ReglaTarifaria:
 
     codigo: str
     modo: ModoCobro
+    # Cómo se le llama a esta opción de cara a quien cobra.
+    nombre: str | None = None
 
     # Precios. Cada modo usa los que le corresponden.
     precio_minuto: Decimal = Decimal(0)

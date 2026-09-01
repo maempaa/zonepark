@@ -28,12 +28,24 @@ interface Cotizacion {
   en_cortesia: boolean;
   tope_aplicado: boolean;
   minimo_aplicado: boolean;
+  /** Las formas en que se le puede cobrar a este ticket, ya cotizadas. */
+  opciones?: Opcion[];
+}
+interface Opcion {
+  codigo: string;
+  nombre: string;
+  recomendada: boolean;
+  cotizacion: Cotizacion;
 }
 interface Pago {
   metodo: string;
   monto: string;
   recibido: string | null;
   cambio: string | null;
+  regla_aplicada: string | null;
+  monto_calculado: string | null;
+  ajuste_manual: boolean;
+  motivo_ajuste: string | null;
 }
 interface Articulo { codigo: string; nombre: string; precio: string }
 
@@ -98,6 +110,22 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
   const [aviso, setAviso] = useState('');
   const llave = useRef<string>('');
 
+  // Cómo se le cobra a este ticket. Un parqueadero puede ofrecer varias
+  // formas —por hora, plena, un convenio— y quien cobra elige con el
+  // cliente delante.
+  const [opcionElegida, setOpcionElegida] = useState<string | null>(null);
+  const [manual, setManual] = useState(false);
+  const [montoManual, setMontoManual] = useState('');
+  const [motivo, setMotivo] = useState('');
+
+  const opciones = cotizacion?.opciones ?? [];
+  const opcion =
+    opciones.find((o) => o.codigo === opcionElegida) ?? opciones[0] ?? null;
+  const totalACobrar = manual
+    ? montoManual || '0'
+    : (opcion?.cotizacion.total ?? cotizacion?.total ?? '0');
+  const desglose = opcion?.cotizacion ?? cotizacion;
+
   const cerrado = ticket.estado !== 'abierto' || recibo !== null;
 
   async function traerCotizacion() {
@@ -139,6 +167,10 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
     llave.current = idUnico();
     setRecibido('');
     setError('');
+    setManual(false);
+    setMontoManual('');
+    setMotivo('');
+    setOpcionElegida(opciones.find((o) => o.recomendada)?.codigo ?? null);
     setCobrando(true);
   }
 
@@ -152,6 +184,9 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
         body: JSON.stringify({
           metodo,
           recibido: metodo === 'efectivo' && recibido ? recibido : null,
+          opcion: manual ? null : (opcion?.codigo ?? null),
+          monto_manual: manual ? (montoManual || '0') : null,
+          motivo_ajuste: manual ? motivo : null,
         }),
       });
       const datos = await res.json();
@@ -242,16 +277,107 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
 
   // ── Confirmación de cobro ─────────────────────────────────────────────
   if (cobrando && cotizacion) {
-    const vuelto = Number(recibido || 0) - Number(cotizacion.total);
+    const vuelto = Number(recibido || 0) - Number(totalACobrar);
     const falta = recibido !== '' && vuelto < 0;
+    const faltaMotivo = manual && !motivo.trim();
     return (
       <div className="space-y-5">
+        {/* Cómo se cobra. Solo aparece si de verdad hay algo que elegir. */}
+        {(opciones.length > 1 || opciones.length === 1) && (
+          <fieldset>
+            <legend className="mb-3 text-zp-caption font-bold uppercase tracking-wide
+                               text-on-surface-variant">
+              Cómo se le cobra
+            </legend>
+            <div className="space-y-3">
+              {opciones.map((o) => {
+                const activa = !manual && opcion?.codigo === o.codigo;
+                return (
+                  <button
+                    key={o.codigo}
+                    type="button"
+                    onClick={() => { setManual(false); setOpcionElegida(o.codigo); }}
+                    aria-pressed={activa}
+                    className={`flex w-full items-center justify-between gap-4 rounded-zp
+                                border-2 border-outline px-4 py-4 text-left transition ${
+                                  activa
+                                    ? 'bg-primary text-on-primary'
+                                    : 'bg-surface-container-lowest active:bg-surface-container'
+                                }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-zp-body font-bold">{o.nombre}</span>
+                      {o.recomendada && (
+                        <span className="block text-zp-caption">tarifa vigente</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-zp-lg font-extrabold tabular-nums">
+                      {pesos(o.cotizacion.total)}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setManual(true)}
+                aria-pressed={manual}
+                className={`flex w-full items-center justify-between gap-4 rounded-zp border-2
+                            border-outline px-4 py-4 text-left transition ${
+                              manual
+                                ? 'bg-primary text-on-primary'
+                                : 'bg-surface-container-lowest active:bg-surface-container'
+                            }`}
+              >
+                <span className="text-zp-body font-bold">Otro valor</span>
+                <span className="text-zp-caption">lo escribes tú</span>
+              </button>
+            </div>
+          </fieldset>
+        )}
+
+        {manual && (
+          <div className="space-y-3 rounded-zp border-2 border-warning
+                          bg-surface-container-lowest p-4">
+            <label className="block space-y-1.5">
+              <span className="text-zp-caption font-bold uppercase tracking-wide
+                               text-on-surface-variant">Valor a cobrar</span>
+              <input
+                inputMode="numeric"
+                autoFocus
+                value={montoManual}
+                onChange={(e) => setMontoManual(e.target.value.replace(/\D/g, ''))}
+                placeholder="0"
+                className="w-full rounded-zp border-2 border-outline
+                           bg-surface-container-lowest px-4 py-4 text-center text-zp-2xl
+                           font-extrabold tabular-nums"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-zp-caption font-bold uppercase tracking-wide
+                               text-on-surface-variant">¿Por qué?</span>
+              <input
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ticket perdido, convenio, cortesía…"
+                className="w-full rounded-zp border-2 border-outline
+                           bg-surface-container-lowest px-4 py-3 text-zp-body"
+              />
+            </label>
+            <p className="text-zp-caption text-on-surface-variant">
+              Queda registrado junto a lo que el sistema había calculado
+              ({pesos(opcion?.cotizacion.total ?? cotizacion.total)}), para que el dueño
+              pueda revisarlo.
+            </p>
+          </div>
+        )}
+
         <div className="rounded-zp border-2 border-outline bg-surface-container-lowest p-6 text-center">
           <p className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">
             Total a cobrar
           </p>
           <p className="mt-1 text-zp-3xl font-extrabold leading-none tabular-nums">
-            {pesos(cotizacion.total)}
+            {pesos(totalACobrar)}
           </p>
         </div>
 
@@ -286,7 +412,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
               ¿Con cuánto paga?
             </p>
             <div className="flex flex-wrap gap-2">
-              {BILLETES.filter((b) => b >= Number(cotizacion.total)).slice(0, 4).map((b) => (
+              {BILLETES.filter((b) => b >= Number(totalACobrar)).slice(0, 4).map((b) => (
                 <button
                   key={b}
                   type="button"
@@ -299,7 +425,7 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
               ))}
               <button
                 type="button"
-                onClick={() => setRecibido(String(Math.ceil(Number(cotizacion.total))))}
+                onClick={() => setRecibido(String(Math.ceil(Number(totalACobrar))))}
                 className="rounded-zp border-2 border-outline bg-surface-container-lowest px-4
                            py-3 text-zp-body font-bold active:bg-surface-container"
               >
@@ -338,8 +464,12 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
           </p>
         )}
 
-        <button onClick={confirmar} disabled={enviando || falta} className={BOTON_PRIMARIO}>
-          {enviando ? 'Cobrando…' : 'Confirmar cobro'}
+        <button
+          onClick={confirmar}
+          disabled={enviando || falta || faltaMotivo}
+          className={BOTON_PRIMARIO}
+        >
+          {enviando ? 'Cobrando…' : faltaMotivo ? 'Escribe el motivo' : 'Confirmar cobro'}
         </button>
         <button
           onClick={() => setCobrando(false)}

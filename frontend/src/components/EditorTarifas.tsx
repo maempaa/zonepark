@@ -34,6 +34,7 @@ interface Franja {
 }
 interface Regla {
   codigo: string;
+  nombre: string | null;
   vehicle_type_id: string;
   modo: string;
   precio_minuto: string;
@@ -174,6 +175,7 @@ function pesos(v: string | number | null): string {
 function aEditable(r: any): Regla {
   return {
     codigo: r.codigo,
+    nombre: r.nombre ?? null,
     vehicle_type_id: r.vehicle_type_id,
     modo: r.modo,
     precio_minuto: r.precio_minuto,
@@ -371,6 +373,41 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
         return actualizada;
       }),
     );
+    setSucio(true);
+  }
+
+  /**
+   * Añade otra forma de cobrar al mismo tipo de vehículo.
+   *
+   * Un parqueadero puede ofrecer varias —por hora, plena, un convenio— y
+   * quien cobra elige al cerrar el ticket con el cliente delante.
+   */
+  function agregarOpcion(tipoId: string) {
+    const tipo = tipos.find((t) => t.id === tipoId);
+    if (!tipo || !reglas) return;
+
+    const cuantas = reglas.filter((r) => r.vehicle_type_id === tipoId).length;
+    setReglas([
+      ...reglas,
+      {
+        codigo: `${tipo.codigo}-opcion-${cuantas + 1}`,
+        nombre: '',
+        vehicle_type_id: tipoId,
+        modo: 'plena',
+        precio_minuto: '0', precio_bloque: '0', precio_plena: '', precio_dia: '0',
+        bloque_minutos: 60, dia_horas: 24,
+        gracia_minutos: 0,
+        cobro_minimo: null, tope_diario: null, tarifa_ticket_perdido: null,
+        redondeo_modo: 'cercano', redondeo_paso: 50,
+        impuesto_modo: 'incluido', impuesto_tasa: '0',
+        prioridad: 0, escalones: [], franja: null,
+      },
+    ]);
+    setSucio(true);
+  }
+
+  function quitarRegla(i: number) {
+    setReglas((rs) => rs && rs.filter((_, j) => j !== i));
     setSucio(true);
   }
 
@@ -678,6 +715,13 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="text-zp-lg font-extrabold">
                     {nombreTipo[r.vehicle_type_id] ?? 'Tipo desconocido'}
+                    {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id).length > 1 && (
+                      <span className="ml-2 text-zp-caption font-bold uppercase
+                                       text-on-surface-variant">
+                        opción {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id)
+                          .indexOf(r) + 1}
+                      </span>
+                    )}
                   </p>
                   <p className="text-zp-caption font-bold uppercase tracking-wide
                                 text-on-surface-variant">
@@ -772,6 +816,36 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
                          onChange={(v) => cambiar(i, 'redondeo_paso', Number(v) || 0)} />
                 </div>
 
+                {!r.franja && (
+                  <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+                    <label className="min-w-56 flex-1 space-y-1.5">
+                      <span className="text-zp-caption font-bold uppercase tracking-wide
+                                       text-on-surface-variant">
+                        Nombre de la opción
+                      </span>
+                      <input
+                        value={r.nombre ?? ''}
+                        placeholder={esquemaDe(r)?.etiqueta ?? ''}
+                        onChange={(e) => cambiar(i, 'nombre', e.target.value)}
+                        className={CAMPO}
+                      />
+                      <span className="block text-zp-caption text-on-surface-variant">
+                        Es lo que ve quien cobra al elegir
+                      </span>
+                    </label>
+                    {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => quitarRegla(i)}
+                        className="rounded-zp border-2 border-error px-4 py-2 text-zp-caption
+                                   font-bold uppercase tracking-wide text-error"
+                      >
+                        Quitar opción
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {r.escalones.length > 0 && (
                   <div className="mt-4 rounded-zp border-2 border-outline-variant p-3">
                     <p className="text-zp-caption font-bold uppercase tracking-wide
@@ -791,6 +865,29 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
               </li>
             ))}
           </ul>
+
+          <div className="rounded-zp border-2 border-dashed border-outline-variant p-4">
+            <p className="text-zp-caption font-bold uppercase tracking-wide
+                          text-on-surface-variant">
+              Agregar otra forma de cobrar
+            </p>
+            <p className="mt-1 text-zp-caption text-on-surface-variant">
+              Quien cobra podrá elegir entre ellas al cerrar el ticket.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tipos.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => agregarOpcion(t.id)}
+                  className="rounded-zp border-2 border-outline bg-surface-container-lowest
+                             px-4 py-2 text-zp-caption font-bold active:bg-surface-container"
+                >
+                  + {t.nombre}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
       )}
 

@@ -61,6 +61,7 @@ def regla_desde_orm(fila: Any) -> ReglaTarifaria:
 
     return ReglaTarifaria(
         codigo=fila.codigo,
+        nombre=fila.nombre,
         modo=ModoCobro(fila.modo),
         precio_minuto=fila.precio_minuto,
         precio_bloque=fila.precio_bloque,
@@ -99,6 +100,7 @@ def _t(valor: time) -> str:
 def serializar(regla: ReglaTarifaria) -> dict[str, Any]:
     datos: dict[str, Any] = {
         "codigo": regla.codigo,
+        "nombre": regla.nombre,
         "modo": regla.modo.value,
         "precio_minuto": _d(regla.precio_minuto),
         "precio_bloque": _d(regla.precio_bloque),
@@ -153,6 +155,8 @@ def deserializar(datos: dict[str, Any]) -> ReglaTarifaria:
 
     return ReglaTarifaria(
         codigo=datos["codigo"],
+        # Los snapshots de antes de esta versión no lo llevan.
+        nombre=datos.get("nombre"),
         modo=ModoCobro(datos["modo"]),
         precio_minuto=Decimal(datos["precio_minuto"]),
         precio_bloque=Decimal(datos["precio_bloque"]),

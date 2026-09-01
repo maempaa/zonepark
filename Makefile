@@ -54,8 +54,12 @@ revision:  ## Genera una migración. Uso: make revision m="mensaje"
 seed:  ## Carga datos iniciales
 	$(COMPOSE) exec api python -m app.db.seed
 
-test:  ## Corre las pruebas del backend
-	$(COMPOSE) exec api pytest -q
+PRUEBAS := docker compose -f docker-compose.test.yml
+
+test:  ## Corre las pruebas en una base desechable, sin tocar producción
+	@$(PRUEBAS) up --build --abort-on-container-exit --exit-code-from pruebas 2>&1 \
+		| grep -vE '^(zonepark-pruebas|db-pruebas)' || true
+	@$(PRUEBAS) down -v >/dev/null 2>&1 || true
 
 lint:  ## Revisa formato y estilo
 	$(COMPOSE) exec api ruff check app tests

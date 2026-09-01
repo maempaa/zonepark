@@ -35,6 +35,13 @@ class CobroIn(BaseModel):
     recibido: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     referencia: str | None = Field(default=None, max_length=64)
 
+    # Con qué opción de cobro. Sin ella se aplica la recomendada.
+    opcion: str | None = Field(default=None, max_length=48)
+    # Sustituye el total calculado. Exige motivo: un valor puesto a mano
+    # sin explicación no se puede auditar.
+    monto_manual: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    motivo_ajuste: str | None = Field(default=None, max_length=300)
+
 
 class AnulacionIn(BaseModel):
     motivo: str = Field(min_length=3, max_length=300)
@@ -80,6 +87,30 @@ class PagoOut(BaseModel):
     recibido: Decimal | None
     cambio: Decimal | None
     referencia: str | None
+    regla_aplicada: str | None = None
+    monto_calculado: Decimal | None = None
+    ajuste_manual: bool = False
+    motivo_ajuste: str | None = None
+
+
+class OpcionCobroOut(BaseModel):
+    """Una forma de cobrarle a este ticket, ya cotizada."""
+
+    codigo: str
+    nombre: str
+    recomendada: bool
+    cotizacion: CotizacionOut
+
+
+class CotizacionConOpcionesOut(CotizacionOut):
+    """La cotización recomendada, más las alternativas.
+
+    Los campos de la recomendada van en la raíz para que la vista en vivo
+    —que solo necesita el valor que va corriendo— no tenga que saber nada
+    de opciones.
+    """
+
+    opciones: list[OpcionCobroOut]
 
 
 class ReciboOut(BaseModel):
