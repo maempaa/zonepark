@@ -77,6 +77,8 @@ class ReglaIn(BaseModel):
 
     franja: FranjaIn | None = None
     prioridad: int = 0
+    # Una opción apagada conserva su precio pero no se ofrece al cobrar.
+    activa: bool = True
     escalones: list[EscalonIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -93,9 +95,12 @@ class ReglaIn(BaseModel):
             ModoCobro.PLENA: ("precio_plena",),
             ModoCobro.POR_DIA: ("precio_dia",),
         }
-        for campo in exigencias.get(self.modo, ()):
-            if getattr(self, campo) <= 0:
-                raise ValueError(f"El modo '{self.modo}' necesita {campo} mayor que cero")
+        # Una opción apagada puede quedar sin precio: se guarda para
+        # recuperarla después, y mientras tanto no se ofrece al cobrar.
+        if self.activa:
+            for campo in exigencias.get(self.modo, ()):
+                if getattr(self, campo) <= 0:
+                    raise ValueError(f"El modo '{self.modo}' necesita {campo} mayor que cero")
 
         if self.modo is ModoCobro.ESCALONADO and not self.escalones:
             raise ValueError("El modo escalonado necesita al menos un escalón")
@@ -167,6 +172,7 @@ class ReglaOut(BaseModel):
     franja_incluye_festivos: bool
     franja_solo_festivos: bool
     prioridad: int
+    activa: bool
     escalones: list[EscalonOut]
 
 

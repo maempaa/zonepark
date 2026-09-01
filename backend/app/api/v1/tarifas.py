@@ -93,6 +93,7 @@ def _fila_de_regla(tenant_id: uuid.UUID, plan_id: uuid.UUID, datos: ReglaIn) -> 
         impuesto_modo=datos.impuesto_modo,
         impuesto_tasa=datos.impuesto_tasa,
         prioridad=datos.prioridad,
+        activa=datos.activa,
         tiene_franja=datos.franja is not None,
     )
     if datos.franja is not None:

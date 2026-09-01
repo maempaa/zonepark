@@ -652,3 +652,27 @@ async def _con_opcion_plena_extra(session, t, precio):
         )
     )
     await session.flush()
+
+
+async def test_una_opcion_apagada_no_se_ofrece_al_cobrar(dos_tenants):
+    """Conserva su precio, pero no aparece entre las formas de cobro."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        plan = await session.scalar(select(RatePlan).where(RatePlan.codigo == "general"))
+        tipo = await session.scalar(select(VehicleType).where(VehicleType.codigo == "carro"))
+        session.add(
+            _RateRule(
+                tenant_id=a.id, rate_plan_id=plan.id, vehicle_type_id=tipo.id,
+                codigo="carro-plena", nombre="Todo el día",
+                modo="plena", precio_plena=_D("12000.00"), activa=False,
+            )
+        )
+        await session.flush()
+
+        tenant, _, _ = await _contexto(session, a)
+        ticket = await _abrir(session, a)
+        opciones = await opciones_de_cobro(
+            session, tenant=tenant, ticket=ticket, ahora=ENTRADA + timedelta(minutes=137)
+        )
+
+    assert "Todo el día" not in {o.nombre for o in opciones}

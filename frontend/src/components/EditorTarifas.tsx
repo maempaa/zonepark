@@ -52,6 +52,7 @@ interface Regla {
   impuesto_modo: string;
   impuesto_tasa: string;
   prioridad: number;
+  activa: boolean;
   escalones: Escalon[];
   franja: Franja | null;
 }
@@ -193,6 +194,8 @@ function aEditable(r: any): Regla {
     impuesto_modo: r.impuesto_modo,
     impuesto_tasa: r.impuesto_tasa,
     prioridad: r.prioridad,
+    // Las tarifas creadas antes de poder apagarlas estaban todas en uso.
+    activa: r.activa ?? true,
     escalones: r.escalones ?? [],
     franja: r.tiene_franja
       ? {
@@ -342,81 +345,156 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
     setSucio(true);
   }
 
-  /**
-   * Cambia el esquema de cobro de una regla.
-   *
-   * Los precios que el esquema nuevo no usa se ponen a cero, y los que sí
-   * usa se dejan vacíos si venían en cero: así el administrador ve que
-   * tiene que ponerlos en vez de publicar una tarifa que cobra nada.
-   */
-  function cambiarEsquema(i: number, clave: string) {
-    const esquema = ESQUEMAS.find((e) => e.clave === clave);
-    if (!esquema) return;
+  // ── Rejilla de tarifas ────────────────────────────────────────────────
+  // Un vehículo puede tener varias formas de cobro a la vez: por hora,
+  // por fracción, por minuto, plena. Cada una se enciende o se apaga sin
+  // perder su precio, y una queda marcada como la que se aplica sola.
+  //
+  // Cada fila de la rejilla es una regla del plan. Se busca por el esquema
+  // y no por el código, para que las tarifas que ya existían con nombres
+  // como "carro-general" caigan en su fila sin renombrarlas.
 
-    setReglas((rs) =>
-      rs && rs.map((r, j) => {
-        if (j !== i) return r;
-        const actualizada: Regla = {
-          ...r,
-          modo: esquema.modo,
-          precio_minuto: '0',
-          precio_bloque: '0',
-          precio_plena: '0',
-          precio_dia: '0',
-        };
-        if (esquema.bloque) actualizada.bloque_minutos = esquema.bloque;
-        // Se conserva el precio que ya existía si el esquema nuevo lo usa.
-        for (const campo of esquema.precios) {
-          const previo = r[campo];
-          actualizada[campo] = previo && Number(previo) > 0 ? previo : '';
-        }
-        return actualizada;
+  /* Cada regla ocupa a lo sumo una casilla de la rejilla. Se reparten por
+     código exacto primero, porque "por bloque de 60 minutos" es a la vez
+     "por hora" y "una fracción de una hora": sin el código, una fracción
+     puesta en 60 caería en la fila de al lado y se pisarían el precio.
+     Las que vienen de antes (carro-general) no traen código de esquema y
+     caen por su forma de cobrar, que es como se editaban hasta ahora. */
+  const rejilla = useMemo(() => {
+    const mapa = new Map<string, Record<string, { regla: Regla; i: number }>>();
+    if (!reglas) return mapa;
+
+    const codigoEsquema = (r: Regla) => {
+      const tipo = tipos.find((t) => t.id === r.vehicle_type_id);
+      return ESQUEMAS.find((e) => r.codigo === `${tipo?.codigo}-${e.clave}`)?.clave ?? null;
+    };
+
+    const candidatas = reglas
+      .map((regla, i) => ({ regla, i }))
+      .filter(({ regla }) => !regla.franja && esquemaDe(regla));
+
+    for (const pasada of [codigoEsquema, (r: Regla) => esquemaDe(r)?.clave ?? null]) {
+      for (const { regla, i } of candidatas) {
+        const clave = pasada(regla);
+        if (!clave) continue;
+        const filas = mapa.get(regla.vehicle_type_id) ?? {};
+        if (filas[clave]) continue;
+        filas[clave] = { regla, i };
+        mapa.set(regla.vehicle_type_id, filas);
+      }
+    }
+    return mapa;
+  }, [reglas, tipos]);
+
+  function filaDe(tipoId: string, clave: string): { regla: Regla; i: number } | null {
+    return rejilla.get(tipoId)?.[clave] ?? null;
+  }
+
+  function reglaVacia(tipoId: string, esquema: Esquema): Regla {
+    const tipo = tipos.find((t) => t.id === tipoId);
+    return {
+      codigo: `${tipo?.codigo ?? tipoId}-${esquema.clave}`,
+      nombre: null,
+      vehicle_type_id: tipoId,
+      modo: esquema.modo,
+      precio_minuto: '0', precio_bloque: '0', precio_plena: '0', precio_dia: '0',
+      bloque_minutos: esquema.bloque ?? 30,
+      dia_horas: 24,
+      gracia_minutos: 0,
+      cobro_minimo: null, tope_diario: null, tarifa_ticket_perdido: null,
+      redondeo_modo: 'cercano', redondeo_paso: 50,
+      impuesto_modo: 'incluido', impuesto_tasa: '0',
+      prioridad: 0, activa: true, escalones: [], franja: null,
+    };
+  }
+
+  function alternarActiva(tipoId: string, esquema: Esquema) {
+    if (!reglas) return;
+    const encontrada = filaDe(tipoId, esquema.clave);
+
+    if (!encontrada) {
+      setReglas([...reglas, reglaVacia(tipoId, esquema)]);
+    } else {
+      setReglas(
+        reglas.map((r, j) => (j === encontrada.i ? { ...r, activa: !r.activa } : r)),
+      );
+    }
+    setSucio(true);
+  }
+
+  function ponerCampo(tipoId: string, esquema: Esquema, campo: keyof Regla, valor: unknown) {
+    if (!reglas) return;
+    const encontrada = filaDe(tipoId, esquema.clave);
+
+    if (!encontrada) {
+      setReglas([...reglas, { ...reglaVacia(tipoId, esquema), [campo]: valor }]);
+    } else {
+      setReglas(reglas.map((r, j) => (j === encontrada.i ? { ...r, [campo]: valor } : r)));
+    }
+    setSucio(true);
+  }
+
+  /**
+   * Marca qué tarifa se aplica sola cuando nadie elige.
+   *
+   * Se hace con la prioridad, y solo entre las que no tienen franja: las
+   * nocturnas y de festivo llevan prioridades más altas y tienen que
+   * seguir ganando a su hora.
+   */
+  function marcarPredeterminada(tipoId: string, clave: string) {
+    if (!reglas) return;
+    setReglas(
+      reglas.map((r) => {
+        if (r.vehicle_type_id !== tipoId || r.franja) return r;
+        return { ...r, prioridad: esquemaDe(r)?.clave === clave ? 1 : 0 };
       }),
     );
     setSucio(true);
   }
 
+  function esPredeterminada(tipoId: string, clave: string): boolean {
+    const activas = (reglas ?? []).filter(
+      (r) => r.vehicle_type_id === tipoId && !r.franja && r.activa,
+    );
+    if (activas.length === 0) return false;
+    const marcada = activas.find((r) => r.prioridad > 0);
+    const elegida = marcada ?? activas[0];
+    return esquemaDe(elegida)?.clave === clave;
+  }
+
   /**
-   * Añade otra forma de cobrar al mismo tipo de vehículo.
+   * Los modificadores son del vehículo, no de cada tarifa.
    *
-   * Un parqueadero puede ofrecer varias —por hora, plena, un convenio— y
-   * quien cobra elige al cerrar el ticket con el cliente delante.
+   * "Quince minutos de cortesía para los carros" es como lo piensa un
+   * parqueadero. Tenerlos por tarifa obligaría a repetirlos y abriría la
+   * puerta a que la cortesía dependiera de qué opción eligió el operario.
    */
-  function agregarOpcion(tipoId: string) {
-    const tipo = tipos.find((t) => t.id === tipoId);
-    if (!tipo || !reglas) return;
-
-    const cuantas = reglas.filter((r) => r.vehicle_type_id === tipoId).length;
-    setReglas([
-      ...reglas,
-      {
-        codigo: `${tipo.codigo}-opcion-${cuantas + 1}`,
-        nombre: '',
-        vehicle_type_id: tipoId,
-        modo: 'plena',
-        precio_minuto: '0', precio_bloque: '0', precio_plena: '', precio_dia: '0',
-        bloque_minutos: 60, dia_horas: 24,
-        gracia_minutos: 0,
-        cobro_minimo: null, tope_diario: null, tarifa_ticket_perdido: null,
-        redondeo_modo: 'cercano', redondeo_paso: 50,
-        impuesto_modo: 'incluido', impuesto_tasa: '0',
-        prioridad: 0, escalones: [], franja: null,
-      },
-    ]);
+  function ponerModificador(tipoId: string, campo: keyof Regla, valor: unknown) {
+    if (!reglas) return;
+    setReglas(
+      reglas.map((r) => (r.vehicle_type_id === tipoId ? { ...r, [campo]: valor } : r)),
+    );
     setSucio(true);
   }
 
-  function quitarRegla(i: number) {
-    setReglas((rs) => rs && rs.filter((_, j) => j !== i));
-    setSucio(true);
+  function modificadorDe(tipoId: string, campo: keyof Regla): string {
+    const r = (reglas ?? []).find((x) => x.vehicle_type_id === tipoId);
+    const v = r?.[campo];
+    return v === null || v === undefined ? '' : String(v);
   }
 
-  /** Reglas a las que les falta un precio que su esquema necesita. */
+  /** Filas encendidas a las que les falta el precio que su esquema pide. */
   const incompletas = (reglas ?? []).filter((r) => {
+    if (!r.activa) return false;
     const esquema = esquemaDe(r);
     if (!esquema) return false;
     return esquema.precios.some((c) => !r[c] || Number(r[c]) <= 0);
   });
+
+  /** Vehículos que se quedarían sin ninguna tarifa. */
+  const sinTarifa = tipos.filter(
+    (t) => !(reglas ?? []).some((r) => r.vehicle_type_id === t.id && r.activa),
+  );
 
   async function crearPrimera(e: React.FormEvent) {
     e.preventDefault();
@@ -694,200 +772,246 @@ export default function EditorTarifas({ tenant, planes: iniciales, tipos }: Prop
             </div>
           </div>
 
+          {sinTarifa.length > 0 && (
+            <p className="flex items-start gap-3 rounded-zp border-2 border-warning
+                          bg-surface-container-lowest px-4 py-3 text-zp-body">
+              <Icono d={ALERTA} className="h-6 w-6 shrink-0" />
+              <span>
+                {sinTarifa.map((t) => t.nombre).join(', ')} se quedaría sin ninguna tarifa
+                encendida, y no se le podrá registrar el ingreso.
+              </span>
+            </p>
+          )}
+
           {incompletas.length > 0 && (
             <p className="flex items-start gap-3 rounded-zp border-2 border-warning
                           bg-surface-container-lowest px-4 py-3 text-zp-body">
               <Icono d={ALERTA} className="h-6 w-6 shrink-0" />
               <span>
                 Falta el precio de{' '}
-                {incompletas.map((r) => nombreTipo[r.vehicle_type_id] ?? r.codigo).join(', ')}.
-                Una tarifa en cero cobraría gratis.
+                {incompletas
+                  .map((r) => `${nombreTipo[r.vehicle_type_id] ?? r.codigo} · ${esquemaDe(r)?.etiqueta ?? ''}`)
+                  .join(', ')}
+                . Una tarifa encendida en cero cobraría gratis.
               </span>
             </p>
           )}
 
-          <ul className="space-y-4">
-            {reglas.map((r, i) => (
-              <li
-                key={r.codigo}
-                className="rounded-zp border-2 border-outline bg-surface-container-lowest p-5"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="text-zp-lg font-extrabold">
-                    {nombreTipo[r.vehicle_type_id] ?? 'Tipo desconocido'}
-                    {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id).length > 1 && (
-                      <span className="ml-2 text-zp-caption font-bold uppercase
-                                       text-on-surface-variant">
-                        opción {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id)
-                          .indexOf(r) + 1}
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-zp-caption font-bold uppercase tracking-wide
-                                text-on-surface-variant">
-                    {esquemaDe(r)?.etiqueta ?? MODOS[r.modo] ?? r.modo}
-                    {r.franja && (
-                      <> · {r.franja.solo_festivos
-                        ? 'festivos'
-                        : `${r.franja.desde_hora.slice(0, 5)}–${r.franja.hasta_hora.slice(0, 5)}`}
-                      </>
-                    )}
-                  </p>
-                </div>
+          <ul className="space-y-5">
+            {tipos.map((tipo) => {
+              const franjas = (reglas ?? []).filter(
+                (r) => r.vehicle_type_id === tipo.id && r.franja,
+              );
+              const enRejilla = new Set(
+                Object.values(rejilla.get(tipo.id) ?? {}).map((f) => f.i),
+              );
+              const otras = (reglas ?? []).filter(
+                (r, i) => r.vehicle_type_id === tipo.id && !r.franja && !enRejilla.has(i),
+              );
 
-                {r.franja && !r.franja.solo_festivos && r.franja.dias.length < 7 && (
+              return (
+                <li key={tipo.id}
+                    className="rounded-zp border-2 border-outline bg-surface-container-lowest p-5">
+                  <p className="text-zp-lg font-extrabold">{tipo.nombre}</p>
                   <p className="mt-1 text-zp-caption text-on-surface-variant">
-                    {r.franja.dias.map((d) => DIAS[d]).join(', ')}
+                    Enciende las formas de cobro que ofreces. Quien cobra elige entre ellas al
+                    cerrar el ticket; la marcada como predeterminada es la que se aplica sola.
                   </p>
-                )}
 
-                {r.modo === 'escalonado' ? (
-                  <p className="mt-4 rounded-zp border-2 border-outline-variant px-4 py-3
-                                text-zp-caption text-on-surface-variant">
-                    Esta tarifa va por escalones. Cambiarla a otro esquema borraría los
-                    tramos de abajo, así que se edita creando un plan nuevo.
-                  </p>
-                ) : (
-                  <fieldset className="mt-5">
-                    <legend className="mb-2 text-zp-caption font-bold uppercase tracking-wide
-                                       text-on-surface-variant">
-                      Cómo se cobra
-                    </legend>
-                    <div className="flex flex-wrap gap-2">
-                      {ESQUEMAS.map((e) => {
-                        const actual = esquemaDe(r)?.clave === e.clave;
-                        return (
-                          <button
-                            key={e.clave}
-                            type="button"
-                            onClick={() => cambiarEsquema(i, e.clave)}
-                            aria-pressed={actual}
-                            title={e.descripcion}
-                            className={`rounded-zp border-2 border-outline px-3 py-2
-                                        text-zp-caption font-bold ${
-                                          actual
-                                            ? 'bg-primary text-on-primary'
-                                            : 'bg-surface-container-lowest active:bg-surface-container'
-                                        }`}
-                          >
-                            {e.etiqueta}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-2 text-zp-caption text-on-surface-variant">
-                      {esquemaDe(r)?.descripcion}
-                    </p>
-                  </fieldset>
-                )}
+                  <div className="mt-4 space-y-3">
+                    {ESQUEMAS.map((e) => {
+                      const encontrada = filaDe(tipo.id, e.clave);
+                      const r = encontrada?.regla;
+                      const activa = r?.activa ?? false;
+                      const falta =
+                        activa && e.precios.some((c) => !r?.[c] || Number(r[c]) <= 0);
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {(esquemaDe(r)?.precios ?? []).map((campo) => (
-                    <Campo
-                      key={campo}
-                      etiqueta={ETIQUETA_PRECIO[campo]}
-                      valor={r[campo]}
-                      resaltado={!r[campo] || Number(r[campo]) <= 0}
-                      onChange={(v) => cambiar(i, campo, v)}
-                    />
-                  ))}
-                  {esquemaDe(r)?.bloqueEditable && (
-                    <Campo etiqueta="Minutos por fracción" entero
-                           valor={String(r.bloque_minutos)}
-                           onChange={(v) => cambiar(i, 'bloque_minutos', Number(v) || 1)} />
-                  )}
-                  {esquemaDe(r)?.diaEditable && (
-                    <Campo etiqueta="Horas por día" entero
-                           valor={String(r.dia_horas)}
-                           onChange={(v) => cambiar(i, 'dia_horas', Number(v) || 24)} />
-                  )}
+                      return (
+                        <div
+                          key={e.clave}
+                          className={`rounded-zp border-2 p-4 transition ${
+                            activa ? 'border-outline' : 'border-outline-variant opacity-70'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex cursor-pointer items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={activa}
+                                onChange={() => alternarActiva(tipo.id, e)}
+                                className="h-6 w-6 shrink-0"
+                              />
+                              <span className="text-zp-body font-bold">{e.etiqueta}</span>
+                            </label>
 
-                  <Campo etiqueta="Cortesía (min)" entero
-                         valor={String(r.gracia_minutos)}
-                         onChange={(v) => cambiar(i, 'gracia_minutos', Number(v) || 0)} />
-                  <Campo etiqueta="Cobro mínimo" opcional
-                         valor={r.cobro_minimo ?? ''}
-                         onChange={(v) => cambiar(i, 'cobro_minimo', v || null)} />
-                  <Campo etiqueta="Tope por 24 h" opcional
-                         valor={r.tope_diario ?? ''}
-                         onChange={(v) => cambiar(i, 'tope_diario', v || null)} />
-                  <Campo etiqueta="Redondear a" entero
-                         valor={String(r.redondeo_paso)}
-                         onChange={(v) => cambiar(i, 'redondeo_paso', Number(v) || 0)} />
-                </div>
+                            <span className="text-zp-caption text-on-surface-variant">
+                              {e.descripcion}
+                            </span>
 
-                {!r.franja && (
-                  <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-                    <label className="min-w-56 flex-1 space-y-1.5">
-                      <span className="text-zp-caption font-bold uppercase tracking-wide
-                                       text-on-surface-variant">
-                        Nombre de la opción
-                      </span>
-                      <input
-                        value={r.nombre ?? ''}
-                        placeholder={esquemaDe(r)?.etiqueta ?? ''}
-                        onChange={(e) => cambiar(i, 'nombre', e.target.value)}
-                        className={CAMPO}
-                      />
-                      <span className="block text-zp-caption text-on-surface-variant">
-                        Es lo que ve quien cobra al elegir
-                      </span>
-                    </label>
-                    {reglas.filter((x) => x.vehicle_type_id === r.vehicle_type_id).length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => quitarRegla(i)}
-                        className="rounded-zp border-2 border-error px-4 py-2 text-zp-caption
-                                   font-bold uppercase tracking-wide text-error"
-                      >
-                        Quitar opción
-                      </button>
-                    )}
+                            {activa && (
+                              <label className="ml-auto flex cursor-pointer items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name={`predeterminada-${tipo.id}`}
+                                  checked={esPredeterminada(tipo.id, e.clave)}
+                                  onChange={() => marcarPredeterminada(tipo.id, e.clave)}
+                                  className="h-5 w-5 shrink-0"
+                                />
+                                <span className="text-zp-caption font-bold uppercase
+                                                 tracking-wide text-on-surface-variant">
+                                  predeterminada
+                                </span>
+                              </label>
+                            )}
+                          </div>
+
+                          {activa && (
+                            <div className="mt-4 flex flex-wrap gap-4">
+                              {e.precios.map((campo) => (
+                                <label key={campo} className="w-44 space-y-1.5">
+                                  <span className="text-zp-caption font-bold uppercase
+                                                   tracking-wide text-on-surface-variant">
+                                    {ETIQUETA_PRECIO[campo]}
+                                  </span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={r?.[campo] ?? ''}
+                                    placeholder="0"
+                                    onChange={(ev) =>
+                                      ponerCampo(
+                                        tipo.id, e, campo,
+                                        ev.target.value.replace(/[^\d.]/g, ''),
+                                      )
+                                    }
+                                    className={`${CAMPO} text-right ${
+                                      falta ? 'border-warning' : ''
+                                    }`}
+                                  />
+                                </label>
+                              ))}
+
+                              {e.clave === 'fraccion' && r?.bloque_minutos === 60 && (
+                                <p className="order-last w-full text-zp-caption text-on-surface-variant">
+                                  Una fracción de 60 minutos cobra igual que «Por hora».
+                                </p>
+                              )}
+
+                              {e.bloqueEditable && (
+                                <label className="w-44 space-y-1.5">
+                                  <span className="text-zp-caption font-bold uppercase
+                                                   tracking-wide text-on-surface-variant">
+                                    Cada … minutos
+                                  </span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={String(r?.bloque_minutos ?? 30)}
+                                    onChange={(ev) =>
+                                      ponerCampo(
+                                        tipo.id, e, 'bloque_minutos',
+                                        Number(ev.target.value.replace(/\D/g, '')) || 1,
+                                      )
+                                    }
+                                    className={`${CAMPO} text-right`}
+                                  />
+                                </label>
+                              )}
+
+                              {e.diaEditable && (
+                                <label className="w-44 space-y-1.5">
+                                  <span className="text-zp-caption font-bold uppercase
+                                                   tracking-wide text-on-surface-variant">
+                                    Horas por día
+                                  </span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={String(r?.dia_horas ?? 24)}
+                                    onChange={(ev) =>
+                                      ponerCampo(
+                                        tipo.id, e, 'dia_horas',
+                                        Number(ev.target.value.replace(/\D/g, '')) || 24,
+                                      )
+                                    }
+                                    className={`${CAMPO} text-right`}
+                                  />
+                                </label>
+                              )}
+
+                              <label className="w-56 space-y-1.5">
+                                <span className="text-zp-caption font-bold uppercase
+                                                 tracking-wide text-on-surface-variant">
+                                  Cómo se llama al cobrar
+                                </span>
+                                <input
+                                  value={r?.nombre ?? ''}
+                                  placeholder={e.etiqueta}
+                                  onChange={(ev) =>
+                                    ponerCampo(tipo.id, e, 'nombre', ev.target.value)
+                                  }
+                                  className={CAMPO}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
 
-                {r.escalones.length > 0 && (
-                  <div className="mt-4 rounded-zp border-2 border-outline-variant p-3">
+                  {/* Modificadores comunes a todas las tarifas del vehículo. */}
+                  <div className="mt-5 border-t-2 border-outline-variant pt-4">
                     <p className="text-zp-caption font-bold uppercase tracking-wide
                                   text-on-surface-variant">
-                      Escalones (se conservan al versionar)
+                      Reglas comunes a todas las tarifas de {tipo.nombre.toLowerCase()}
                     </p>
-                    <ul className="mt-2 space-y-1">
-                      {r.escalones.map((e, k) => (
-                        <li key={k} className="text-zp-caption tabular-nums">
-                          {e.desde_minuto}–{e.hasta_minuto ?? '∞'} min · {pesos(e.precio)} por{' '}
-                          {e.unidad === 'fijo' ? 'el tramo' : e.unidad}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      <Campo etiqueta="Cortesía (min)" entero
+                             valor={modificadorDe(tipo.id, 'gracia_minutos')}
+                             onChange={(v) =>
+                               ponerModificador(tipo.id, 'gracia_minutos', Number(v) || 0)} />
+                      <Campo etiqueta="Cobro mínimo" opcional
+                             valor={modificadorDe(tipo.id, 'cobro_minimo')}
+                             onChange={(v) =>
+                               ponerModificador(tipo.id, 'cobro_minimo', v || null)} />
+                      <Campo etiqueta="Tope por 24 h" opcional
+                             valor={modificadorDe(tipo.id, 'tope_diario')}
+                             onChange={(v) =>
+                               ponerModificador(tipo.id, 'tope_diario', v || null)} />
+                      <Campo etiqueta="Redondear a" entero
+                             valor={modificadorDe(tipo.id, 'redondeo_paso')}
+                             onChange={(v) =>
+                               ponerModificador(tipo.id, 'redondeo_paso', Number(v) || 0)} />
+                    </div>
                   </div>
-                )}
-              </li>
-            ))}
-          </ul>
 
-          <div className="rounded-zp border-2 border-dashed border-outline-variant p-4">
-            <p className="text-zp-caption font-bold uppercase tracking-wide
-                          text-on-surface-variant">
-              Agregar otra forma de cobrar
-            </p>
-            <p className="mt-1 text-zp-caption text-on-surface-variant">
-              Quien cobra podrá elegir entre ellas al cerrar el ticket.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {tipos.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => agregarOpcion(t.id)}
-                  className="rounded-zp border-2 border-outline bg-surface-container-lowest
-                             px-4 py-2 text-zp-caption font-bold active:bg-surface-container"
-                >
-                  + {t.nombre}
-                </button>
-              ))}
-            </div>
-          </div>
+                  {(franjas.length > 0 || otras.length > 0) && (
+                    <div className="mt-4 rounded-zp border-2 border-outline-variant p-3">
+                      <p className="text-zp-caption font-bold uppercase tracking-wide
+                                    text-on-surface-variant">
+                        Se conservan tal cual
+                      </p>
+                      <ul className="mt-2 space-y-1">
+                        {franjas.map((r) => (
+                          <li key={r.codigo} className="text-zp-caption">
+                            <strong>{r.nombre ?? r.codigo}</strong> ·{' '}
+                            {r.franja?.solo_festivos
+                              ? 'solo festivos'
+                              : `${r.franja?.desde_hora.slice(0, 5)}–${r.franja?.hasta_hora.slice(0, 5)}`}
+                            {' · se aplica sola a su hora, no se ofrece como opción'}
+                          </li>
+                        ))}
+                        {otras.map((r) => (
+                          <li key={r.codigo} className="text-zp-caption">
+                            <strong>{r.nombre ?? r.codigo}</strong> · escalonada, se edita
+                            creando un plan nuevo
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
 

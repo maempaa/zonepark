@@ -524,3 +524,106 @@ async def test_al_operario_le_falta_permiso_para_cargar_predeterminados(dos_tena
         headers=await _operario(client, a),
     )
     assert r.status_code == 403
+
+
+# ── Encender y apagar opciones ───────────────────────────────────────────
+# El parqueadero define varias formas de cobrar el mismo vehículo y no
+# siempre las ofrece todas. Apagar una no puede costarle el precio.
+
+def _regla(tipo_id, codigo, **extra):
+    base = {
+        "codigo": codigo, "vehicle_type_id": str(tipo_id),
+        "modo": "por_bloque", "precio_bloque": "3000", "bloque_minutos": 60,
+    }
+    return base | extra
+
+
+async def test_una_opcion_apagada_conserva_su_precio(dos_tenants, client):
+    """Apagarla y volver a encenderla no debe obligar a teclearla de nuevo."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    await client.put(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/reglas", headers=cab,
+        json=[
+            _regla(a.tipos["carro"], "carro-hora", precio_bloque="3500"),
+            _regla(a.tipos["carro"], "carro-plena", modo="plena",
+                   precio_plena="12000", precio_bloque="0", activa=False),
+        ],
+    )
+
+    detalle = (await client.get(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}", headers=cab
+    )).json()
+    apagada = next(r for r in detalle["reglas"] if r["codigo"] == "carro-plena")
+    assert apagada["activa"] is False
+    assert Decimal(apagada["precio_plena"]) == Decimal("12000.00")
+
+
+async def test_una_opcion_apagada_puede_quedarse_sin_precio(dos_tenants, client):
+    """Se guarda para llenarla después; mientras tanto no se cobra con ella."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    r = await client.put(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/reglas", headers=cab,
+        json=[
+            _regla(a.tipos["carro"], "carro-hora"),
+            _regla(a.tipos["carro"], "carro-minuto", modo="por_minuto",
+                   precio_bloque="0", precio_minuto="0", activa=False),
+        ],
+    )
+    assert r.status_code == 200
+
+
+async def test_una_opcion_encendida_sin_precio_se_rechaza(dos_tenants, client):
+    """Encendida y en cero cobraría gratis."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    r = await client.put(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/reglas", headers=cab,
+        json=[_regla(a.tipos["carro"], "carro-minuto", modo="por_minuto",
+                     precio_bloque="0", precio_minuto="0", activa=True)],
+    )
+    assert r.status_code == 422
+
+
+async def test_varias_tarifas_conviven_para_el_mismo_vehiculo(dos_tenants, client):
+    """Es lo que pidió el usuario final: por hora, por fracción y por minuto
+    rellenables a la vez."""
+    a, _ = dos_tenants
+    cab = await _admin(client, a)
+    _, creado = await _duplicar(client, a, cab)
+    borrador = creado.json()
+
+    r = await client.put(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/reglas", headers=cab,
+        json=[
+            _regla(a.tipos["carro"], "carro-hora", precio_bloque="3500",
+                   bloque_minutos=60, prioridad=1),
+            _regla(a.tipos["carro"], "carro-fraccion", precio_bloque="1000",
+                   bloque_minutos=15),
+            _regla(a.tipos["carro"], "carro-minuto", modo="por_minuto",
+                   precio_bloque="0", precio_minuto="60"),
+            _regla(a.tipos["carro"], "carro-plena", modo="plena",
+                   precio_bloque="0", precio_plena="15000"),
+        ],
+    )
+    assert r.status_code == 200
+    assert len(r.json()["reglas"]) == 4
+
+    # La marcada con prioridad es la que aplica el simulador.
+    simulacion = await client.post(
+        f"/api/v1/t/{a.slug}/planes/{borrador['id']}/simular", headers=cab,
+        json={"vehicle_type_id": str(a.tipos["carro"]),
+              "entrada": "2026-08-24T13:00:00Z", "salida": "2026-08-24T15:17:00Z"},
+    )
+    # Tres horas a 3.500
+    assert Decimal(simulacion.json()["total"]) == Decimal("10500.00")

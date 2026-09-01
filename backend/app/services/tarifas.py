@@ -74,6 +74,8 @@ async def reglas_del_plan(
                 select(RateRule).where(
                     RateRule.rate_plan_id == plan.id,
                     RateRule.vehicle_type_id == vehicle_type_id,
+                    # Las apagadas conservan su precio pero no se cobran.
+                    RateRule.activa.is_(True),
                 )
             )
         ).all()

@@ -142,6 +142,11 @@ class RateRule(UUIDPk, TenantScoped, Timestamps, Base):
 
     prioridad: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # Apagar una opción no borra su precio: el parqueadero puede dejar de
+    # ofrecer la tarifa plena en temporada baja y recuperarla después sin
+    # volver a teclearla.
+    activa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     plan: Mapped[RatePlan] = relationship(back_populates="reglas")
     escalones: Mapped[list["RateTier"]] = relationship(
         back_populates="regla",
