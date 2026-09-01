@@ -69,6 +69,32 @@ cookies `Secure`.
 > descarta sobre HTTP. Además `crypto.randomUUID` —la llave que evita
 > cobrar dos veces— solo existe en contexto seguro.
 
+## El dominio hay que declararlo
+
+`DOMINIOS_PERMITIDOS` en `.env` lista los dominios desde los que se sirve
+el sitio. No es opcional: Astro valida contra ella el `Host` de cada
+petición y, si la lista está vacía, descarta el host real y arma toda url
+como `http://localhost`. Su propio chequeo CSRF pasa entonces a rechazar
+los POST y DELETE legítimos que van sin cuerpo — publicar una tarifa,
+descartar un borrador, cerrar sesión — con un `403 Cross-site POST form
+submissions are forbidden` que no menciona el host por ningún lado.
+
+`localhost` y `127.0.0.1` se aceptan siempre. Para varios dominios,
+sepáralos con comas.
+
+**Se lee al compilar el front**, no al arrancarlo: si cambias el dominio,
+`make deploy` (que reconstruye la imagen). Reiniciar el contenedor no
+alcanza.
+
+Para comprobarlo sin sesión, un POST con el `Origin` del sitio debe
+responder `401` (llegó al backend y pide credenciales), nunca `403`:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  https://zonepark.softutopic.com/api/v1/t/central/planes/x/activar \
+  -H 'Origin: https://zonepark.softutopic.com'
+```
+
 ## Respaldos
 
 Diarios a las 3:15, por `cron`, con rutas absolutas. Se conservan los

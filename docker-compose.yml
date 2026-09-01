@@ -71,11 +71,13 @@ services:
       target: prod
       args:
         WEB_PORT: ${WEB_PORT}
+        DOMINIOS_PERMITIDOS: ${DOMINIOS_PERMITIDOS:-}
     restart: unless-stopped
     environment:
       WEB_PORT: ${WEB_PORT}
       HOST: 0.0.0.0
       PORT: ${WEB_PORT}
+      DOMINIOS_PERMITIDOS: ${DOMINIOS_PERMITIDOS:-}
       PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:${API_PORT}}
       INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://api:${API_PORT}}
     ports:

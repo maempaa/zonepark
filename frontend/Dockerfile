@@ -11,6 +11,10 @@ CMD ["npm", "run", "dev"]
 
 # ── build: compila el bundle de servidor ─────────────────────
 FROM base AS build
+# astro.config lee esto al compilar y lo hornea en el manifiesto; no
+# alcanza con pasarlo al contenedor que corre.
+ARG DOMINIOS_PERMITIDOS=""
+ENV DOMINIOS_PERMITIDOS=$DOMINIOS_PERMITIDOS
 COPY . .
 RUN npm run build
 
