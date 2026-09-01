@@ -269,41 +269,59 @@ export default function EditorCatalogo({
                          bg-surface-container-lowest">
             {articulos.map((a) => (
               <li key={a.id}
-                  className="flex flex-wrap items-center gap-4 border-b border-outline-variant
-                             px-4 py-3 last:border-0">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-zp-body font-bold">{a.nombre}</p>
+                  className={`space-y-3 border-b border-outline-variant px-4 py-4
+                              last:border-0 ${a.activo ? '' : 'opacity-70'}`}>
+                {/* El nombre manda y va solo en su renglón: al compartir la
+                    fila con el precio y el botón quedaba recortado justo en
+                    los teléfonos, que es donde se usa esta pantalla. */}
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <p className="text-zp-body font-bold break-words">{a.nombre}</p>
                   {!a.activo && (
-                    <p className="text-zp-caption text-on-surface-variant">inactivo</p>
+                    <span className="rounded-zp border-2 border-outline-variant px-2 py-0.5
+                                     text-zp-caption font-bold uppercase tracking-wide
+                                     text-on-surface-variant">
+                      inactivo
+                    </span>
                   )}
                 </div>
-                {puedeEditar ? (
-                  <input
-                    inputMode="numeric"
-                    defaultValue={a.precio}
-                    onBlur={(e) => {
-                      const v = e.target.value.replace(/[^\d.]/g, '');
-                      if (v && v !== a.precio) void guardarPrecio(a, v);
-                    }}
-                    className="w-32 rounded-zp border-2 border-outline
-                               bg-surface-container-lowest px-3 py-1.5 text-right
-                               text-zp-body font-semibold tabular-nums"
-                  />
-                ) : (
-                  <span className="text-zp-body font-semibold tabular-nums">
-                    {pesos(a.precio)}
-                  </span>
-                )}
-                {puedeEditar && (
-                  <button
-                    onClick={() => alternarArticulo(a)}
-                    disabled={ocupado}
-                    className="rounded-zp border-2 border-outline px-3 py-1.5 text-zp-caption
-                               font-bold uppercase tracking-wide"
-                  >
-                    {a.activo ? 'Desactivar' : 'Activar'}
-                  </button>
-                )}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  {puedeEditar ? (
+                    <label className="flex items-center gap-2">
+                      <span className="text-zp-caption font-bold uppercase tracking-wide
+                                       text-on-surface-variant">
+                        Precio
+                      </span>
+                      <input
+                        inputMode="numeric"
+                        aria-label={`Precio de ${a.nombre}`}
+                        defaultValue={a.precio}
+                        onBlur={(e) => {
+                          const v = e.target.value.replace(/[^\d.]/g, '');
+                          if (v && v !== a.precio) void guardarPrecio(a, v);
+                        }}
+                        className="w-32 rounded-zp border-2 border-outline
+                                   bg-surface-container-lowest px-3 py-2 text-right
+                                   text-zp-body font-semibold tabular-nums"
+                      />
+                    </label>
+                  ) : (
+                    <span className="text-zp-body font-semibold tabular-nums">
+                      {pesos(a.precio)}
+                    </span>
+                  )}
+
+                  {puedeEditar && (
+                    <button
+                      onClick={() => alternarArticulo(a)}
+                      disabled={ocupado}
+                      className="ml-auto rounded-zp border-2 border-outline px-4 py-2
+                                 text-zp-caption font-bold uppercase tracking-wide"
+                    >
+                      {a.activo ? 'Desactivar' : 'Activar'}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
@@ -311,9 +329,9 @@ export default function EditorCatalogo({
 
         {puedeEditar && (
           <form onSubmit={crearArticulo}
-                className="flex flex-wrap items-end gap-4 rounded-zp border-2 border-outline
+                className="space-y-4 rounded-zp border-2 border-outline
                            bg-surface-container-lowest p-4">
-            <label className="min-w-48 flex-1 space-y-1.5">
+            <label className="block space-y-1.5">
               <span className="text-zp-caption font-bold uppercase tracking-wide
                                text-on-surface-variant">Nuevo artículo</span>
               <input
@@ -322,25 +340,27 @@ export default function EditorCatalogo({
                 className={CAMPO}
               />
             </label>
-            <label className="w-40 space-y-1.5">
-              <span className="text-zp-caption font-bold uppercase tracking-wide
-                               text-on-surface-variant">Precio</span>
-              <input
-                required inputMode="numeric" value={nuevoArticulo.precio} placeholder="0"
-                onChange={(e) =>
-                  setNuevoArticulo({ ...nuevoArticulo, precio: e.target.value.replace(/\D/g, '') })
-                }
-                className={`${CAMPO} text-right tabular-nums`}
-              />
-            </label>
-            <button type="submit"
-                    disabled={ocupado || !nuevoArticulo.nombre.trim() || !nuevoArticulo.precio}
-                    className="rounded-zp border-2 border-outline bg-primary px-5 py-2
-                               text-zp-body font-extrabold uppercase tracking-wide
-                               text-on-primary disabled:bg-surface-container-high
-                               disabled:text-on-surface-variant">
-              Agregar
-            </button>
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="w-40 space-y-1.5">
+                <span className="text-zp-caption font-bold uppercase tracking-wide
+                                 text-on-surface-variant">Precio</span>
+                <input
+                  required inputMode="numeric" value={nuevoArticulo.precio} placeholder="0"
+                  onChange={(e) =>
+                    setNuevoArticulo({ ...nuevoArticulo, precio: e.target.value.replace(/\D/g, '') })
+                  }
+                  className={`${CAMPO} text-right tabular-nums`}
+                />
+              </label>
+              <button type="submit"
+                      disabled={ocupado || !nuevoArticulo.nombre.trim() || !nuevoArticulo.precio}
+                      className="ml-auto rounded-zp border-2 border-outline bg-primary px-5 py-2
+                                 text-zp-body font-extrabold uppercase tracking-wide
+                                 text-on-primary disabled:bg-surface-container-high
+                                 disabled:text-on-surface-variant">
+                Agregar
+              </button>
+            </div>
           </form>
         )}
       </section>
