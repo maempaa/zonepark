@@ -267,6 +267,40 @@ Cubren, entre otras cosas:
 - La aritmética del arqueo, regla por regla
 - Que el operario no vea el esperado antes de contar
 
+## Recibo en vivo del cliente
+
+Quien deja el vehículo puede ver, desde su propio celular y sin instalar
+nada, cuánto lleva corriendo su ticket.
+
+- **Cómo llega.** Cada ticket nace con un `token_publico` de 128 bits. Al
+  registrar el ingreso —y también desde el detalle del ticket, si el
+  cliente lo perdió— el operario ve un botón para compartir el enlace por
+  WhatsApp o copiarlo. El consecutivo (`S1-000002`) y la placa no sirven
+  como credencial: el primero es adivinable y la segunda está a la vista
+  en el parabrisas.
+- **Qué muestra.** Nombre del parqueadero y de la sede, dirección,
+  teléfono como enlace de llamada, placa, tipo de vehículo, hora de
+  entrada, tiempo transcurrido, el monto y el aviso de responsabilidad
+  por objetos dejados en el vehículo.
+- **Qué no muestra.** Ni quién abrió o cerró el ticket, ni contra qué
+  turno de caja se cobró, ni con cuánto pagó el cliente, ni el snapshot
+  de tarifas. El endpoint no reutiliza el esquema del operario, para que
+  agregar un campo allá no lo publique aquí.
+- **El monto es un estimado mientras el ticket esté abierto**, y así se
+  rotula: quien cobra puede elegir otra forma de cobro o ajustar el valor
+  a mano. Al cerrarse, el recibo pasa a mostrar lo que efectivamente se
+  cobró, no un cálculo nuevo.
+- **Dos relojes.** El tiempo transcurrido corre en el navegador cada
+  segundo; el monto solo cambia cuando el servidor lo recalcula, cada 30
+  segundos y al volver a la pestaña. Interpolar el precio en el cliente
+  sería inventar una cifra que el parqueadero no va a cobrar.
+- La página va con `no-store` y `noindex`, y un token inexistente y un
+  parqueadero inexistente responden igual: 404.
+
+El administrador llena dirección, teléfono y el texto del aviso en
+**Datos del parqueadero** (`/t/{slug}/config/parqueadero`). Sin aviso
+propio se muestra el de fábrica.
+
 ## 11. Lo que sigue
 
 En orden de valor, a mi juicio:

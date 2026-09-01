@@ -1,6 +1,7 @@
 ---
 import Base from '../../../../layouts/Base.astro';
 import CobrarTicket from '../../../../components/CobrarTicket';
+import EnlaceRecibo from '../../../../components/EnlaceRecibo';
 import Placa from '../../../../components/Placa.astro';
 import { llamarApi } from '../../../../lib/api';
 
@@ -69,6 +70,18 @@ const puedeCobrar = perfil.permisos.includes('ticket:checkout');
                   text-center">
         <Placa placa={ticket.placa} codigo={ticket.codigo} class="text-zp-2xl" />
         <p class="text-zp-body text-on-surface-variant">Tu rol no cobra tickets.</p>
+      </div>
+    )}
+
+    {/* Si el cliente perdió el enlace, se le vuelve a pasar desde aquí. */}
+    {ticket.estado === 'abierto' && (
+      <div class="mt-5">
+        <EnlaceRecibo
+          tenant={tenant!}
+          token={ticket.token_publico}
+          codigo={ticket.codigo}
+          client:load
+        />
       </div>
     )}
   </main>

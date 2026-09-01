@@ -37,6 +37,11 @@ class Tenant(UUIDPk, Timestamps, Base):
         Integer, nullable=False, default=settings.default_rounding_step
     )
 
+    # Vacío = la aplicación pone su texto por defecto. Se guarda solo
+    # cuando el parqueadero escribe el suyo, para poder mejorar el de
+    # fábrica sin pisarle el que ya redactó.
+    aviso_responsabilidad: Mapped[str | None] = mapped_column(String(400))
+
     status: Mapped[TenantStatus] = mapped_column(
         enum_column(TenantStatus, 16),
         nullable=False,

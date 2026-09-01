@@ -1,0 +1,41 @@
+---
+/**
+ * El recibo del cliente. Sin sesión: la credencial es el token del ticket.
+ *
+ * Se pinta ya resuelto desde el servidor —quien lo abre está en la calle,
+ * con la red del celular— y solo después el componente se encarga de
+ * mantenerlo al día.
+ */
+import Base from '../../../../layouts/Base.astro';
+import Logo from '../../../../components/Logo.astro';
+import ReciboVivo from '../../../../components/ReciboVivo';
+import type { Recibo } from '../../../../components/ReciboVivo';
+import { apiGet } from '../../../../lib/api';
+
+const { tenant, token } = Astro.params;
+
+const r = await apiGet<Recibo>(`/api/v1/t/${tenant}/publico/recibo/${token}`);
+
+// Un token que no existe y un parqueadero que no existe se ven igual a
+// propósito: responder distinto diría si el ticket existe o no.
+if (!r.ok) {
+  return new Response(null, { status: 404, statusText: 'Recibo no encontrado' });
+}
+const recibo = r.data;
+
+// Este enlace no debe quedar en buscadores ni en caches compartidos.
+Astro.response.headers.set('cache-control', 'no-store, private');
+Astro.response.headers.set('x-robots-tag', 'noindex, nofollow');
+---
+<Base titulo={`Recibo ${recibo.codigo}`}>
+  <main class="flex-1 px-5 py-8">
+    <ReciboVivo tenant={tenant!} token={token!} inicial={recibo} client:load />
+  </main>
+
+  <footer class="px-5 pb-8 pt-2 text-center">
+    <Logo alto={28} class="mx-auto opacity-60" />
+    <p class="mt-2 text-zp-caption text-on-surface-variant">
+      Conserva este enlace: es tu comprobante.
+    </p>
+  </footer>
+</Base>

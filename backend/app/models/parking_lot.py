@@ -30,6 +30,8 @@ class ParkingLot(UUIDPk, TenantScoped, Timestamps, Base):
     codigo: Mapped[str] = mapped_column(String(32), nullable=False)
     nombre: Mapped[str] = mapped_column(String(160), nullable=False)
     direccion: Mapped[str | None] = mapped_column(String(240))
+    # Lo ve el cliente en su recibo: a quién llamar si algo pasa.
+    telefono: Mapped[str | None] = mapped_column(String(32))
 
     # Nulo = hereda la del tenant. La aritmética de tarifas usa la de la sede.
     timezone: Mapped[str | None] = mapped_column(String(64))

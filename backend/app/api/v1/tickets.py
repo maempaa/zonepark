@@ -67,6 +67,7 @@ def _detalle(ticket: Ticket) -> TicketDetalleOut:
     snapshot = ticket.rate_snapshot or {}
     return TicketDetalleOut(
         **TicketOut.model_validate(ticket).model_dump(),
+        token_publico=ticket.token_publico,
         items=list(ticket.items),
         anulacion_motivo=ticket.anulacion_motivo,
         plan_codigo=snapshot.get("plan_codigo"),

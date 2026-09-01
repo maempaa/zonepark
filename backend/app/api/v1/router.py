@@ -5,8 +5,10 @@ from app.api.v1 import (
     auth,
     caja,
     catalogo,
+    config,
     health,
     meta,
+    publico,
     reportes,
     sedes,
     tarifas,
@@ -26,7 +28,10 @@ api_router.include_router(admin.router)
 # tenant antes de tocar la base y corre bajo RLS.
 tenant_router = APIRouter(prefix="/t/{tenant_slug}")
 tenant_router.include_router(auth.router)
+# Sin sesión: lo abre el cliente con el enlace de su ticket.
+tenant_router.include_router(publico.router)
 tenant_router.include_router(sedes.router)
+tenant_router.include_router(config.router)
 tenant_router.include_router(catalogo.router)
 tenant_router.include_router(tarifas.router)
 tenant_router.include_router(tickets.router)

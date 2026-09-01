@@ -56,6 +56,11 @@ const atajos = [
     titulo: 'Catálogo',
     detalle: 'Tipos de vehículo y artículos',
   },
+  perfil.permisos.includes('lot:read') && {
+    href: `/t/${tenant}/config/parqueadero`,
+    titulo: 'Datos del parqueadero',
+    detalle: 'Lo que ve el cliente en su recibo',
+  },
 ].filter(Boolean) as Array<{ href: string; titulo: string; detalle: string }>;
 
 const sedeUnica = perfil.sedes !== null && sedes.length === 1 ? sedes[0].nombre : null;

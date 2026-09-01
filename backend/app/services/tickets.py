@@ -19,6 +19,7 @@ el administrador cambie las tarifas mientras el carro está adentro.
 """
 
 import re
+import secrets
 import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -211,6 +212,9 @@ async def abrir_ticket(
         vehicle_type_id=tipo.id,
         numero=numero,
         codigo=f"{sede.ticket_prefix}-{numero:06d}",
+        # 128 bits. El cliente abre su recibo con esto y con nada más, así
+        # que tiene que ser imposible de acertar probando.
+        token_publico=secrets.token_hex(16),
         placa=placa,
         entrada_at=entrada,
         estado=EstadoTicket.ABIERTO,

@@ -80,6 +80,12 @@ class Ticket(UUIDPk, TenantScoped, Timestamps, Base):
     # Nula para los tipos que no llevan placa (bicicleta, casco).
     placa: Mapped[str | None] = mapped_column(String(16), index=True)
 
+    # La llave del recibo público. El consecutivo es adivinable y la placa
+    # está a la vista en el parabrisas: ninguno de los dos sirve de secreto.
+    token_publico: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True, unique=True
+    )
+
     entrada_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     salida_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

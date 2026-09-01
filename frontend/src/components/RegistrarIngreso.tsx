@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import IconoVehiculo from './IconoVehiculo';
+import EnlaceRecibo from './EnlaceRecibo';
 import { idUnico } from '../lib/id';
 
 /**
@@ -60,7 +61,7 @@ type Estado =
   | { fase: 'form' }
   | { fase: 'enviando' }
   | { fase: 'duplicada'; existente: TicketAbierto }
-  | { fase: 'listo'; codigo: string; placa: string | null }
+  | { fase: 'listo'; codigo: string; placa: string | null; token: string }
   | { fase: 'error'; mensaje: string };
 
 function pesos(valor: string | number): string {
@@ -153,7 +154,10 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
         });
         return;
       }
-      setEstado({ fase: 'listo', codigo: datos.codigo, placa: datos.placa });
+      setEstado({
+        fase: 'listo', codigo: datos.codigo, placa: datos.placa,
+        token: datos.token_publico,
+      });
     } catch {
       setEstado({ fase: 'error', mensaje: 'Sin conexión con el servidor' });
     }
@@ -184,6 +188,8 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
             <p className="mt-3 text-zp-body text-on-surface-variant">{estado.codigo}</p>
           )}
         </div>
+
+        <EnlaceRecibo tenant={tenant} token={estado.token} codigo={estado.codigo} />
 
         <button
           onClick={otroMas}

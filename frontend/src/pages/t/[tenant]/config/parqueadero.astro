@@ -1,0 +1,48 @@
+---
+import Base from '../../../../layouts/Base.astro';
+import CabeceraPantalla from '../../../../components/CabeceraPantalla.astro';
+import DatosParqueadero from '../../../../components/DatosParqueadero';
+import { llamarApi } from '../../../../lib/api';
+
+const { tenant } = Astro.params;
+
+const perfilRes = await llamarApi(Astro.cookies, tenant!, '/auth/me');
+if (!perfilRes || !perfilRes.ok) return Astro.redirect(`/t/${tenant}/login`);
+const perfil = await perfilRes.json();
+
+if (!perfil.permisos.includes('lot:read')) {
+  return new Response('No tienes permiso para ver esta pantalla', { status: 403 });
+}
+
+const [sedesRes, configRes] = await Promise.all([
+  llamarApi(Astro.cookies, tenant!, '/sedes'),
+  llamarApi(Astro.cookies, tenant!, '/config'),
+]);
+const sedes = sedesRes?.ok ? await sedesRes.json() : [];
+// Sin `tenant:read` la pantalla sigue sirviendo para dirección y teléfono;
+// solo se queda sin la parte del aviso.
+const config = configRes?.ok
+  ? await configRes.json()
+  : { nombre: tenant, aviso_responsabilidad: null, aviso_efectivo: '' };
+---
+<Base titulo="Datos del parqueadero" anchura="tablet">
+  <CabeceraPantalla
+    titulo="Datos del parqueadero"
+    volverA={`/t/${tenant}`}
+    etiquetaVolver="Volver al tablero"
+  />
+  <main class="flex-1 px-6 py-6">
+    <p class="mb-6 text-zp-body text-on-surface-variant">
+      Esto es lo que ve el cliente cuando abre el recibo de su vehículo desde el
+      celular.
+    </p>
+    <DatosParqueadero
+      tenant={tenant!}
+      sedes={sedes}
+      config={config}
+      puedeEditarSedes={perfil.permisos.includes('lot:manage')}
+      puedeEditarConfig={perfil.permisos.includes('tenant:update')}
+      client:load
+    />
+  </main>
+</Base>
