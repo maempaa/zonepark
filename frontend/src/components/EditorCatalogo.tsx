@@ -33,6 +33,11 @@ const CAMPO =
   'w-full rounded-zp border-2 border-outline bg-surface-container-lowest px-3 py-2 ' +
   'text-zp-body text-on-surface';
 
+/** La base guarda "1000.00"; en pesos no hay centavos que mostrar. */
+function sinCentavos(v: string | number): string {
+  return String(v).replace(/\.00$/, '');
+}
+
 function pesos(v: string | number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', maximumFractionDigits: 0,
@@ -285,26 +290,27 @@ export default function EditorCatalogo({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center justify-between gap-3">
                   {puedeEditar ? (
-                    <label className="flex items-center gap-2">
-                      <span className="text-zp-caption font-bold uppercase tracking-wide
-                                       text-on-surface-variant">
-                        Precio
-                      </span>
+                    <div className="campo-moneda flex min-w-0 items-center rounded-zp
+                                    border-2 border-outline bg-surface-container-lowest pl-3">
+                      <span aria-hidden className="text-zp-body font-semibold
+                                                   text-on-surface-variant">$</span>
                       <input
                         inputMode="numeric"
                         aria-label={`Precio de ${a.nombre}`}
-                        defaultValue={a.precio}
+                        defaultValue={sinCentavos(a.precio)}
                         onBlur={(e) => {
-                          const v = e.target.value.replace(/[^\d.]/g, '');
-                          if (v && v !== a.precio) void guardarPrecio(a, v);
+                          // Solo dígitos, como en el formulario de alta: el punto
+                          // es separador de miles en Colombia y "1.000" tecleado
+                          // aquí se habría guardado como un peso.
+                          const v = e.target.value.replace(/\D/g, '');
+                          if (v && v !== sinCentavos(a.precio)) void guardarPrecio(a, v);
                         }}
-                        className="w-32 rounded-zp border-2 border-outline
-                                   bg-surface-container-lowest px-3 py-2 text-right
-                                   text-zp-body font-semibold tabular-nums"
+                        className="w-24 bg-transparent py-2 pr-3 text-right text-zp-body
+                                   font-semibold tabular-nums outline-none"
                       />
-                    </label>
+                    </div>
                   ) : (
                     <span className="text-zp-body font-semibold tabular-nums">
                       {pesos(a.precio)}
@@ -315,8 +321,8 @@ export default function EditorCatalogo({
                     <button
                       onClick={() => alternarArticulo(a)}
                       disabled={ocupado}
-                      className="ml-auto rounded-zp border-2 border-outline px-4 py-2
-                                 text-zp-caption font-bold uppercase tracking-wide"
+                      className="shrink-0 rounded-zp border-2 border-outline px-4 py-2
+                                 text-zp-caption font-bold"
                     >
                       {a.activo ? 'Desactivar' : 'Activar'}
                     </button>
@@ -340,8 +346,8 @@ export default function EditorCatalogo({
                 className={CAMPO}
               />
             </label>
-            <div className="flex flex-wrap items-end gap-4">
-              <label className="w-40 space-y-1.5">
+            <div className="flex items-end justify-between gap-4">
+              <label className="w-40 shrink space-y-1.5">
                 <span className="text-zp-caption font-bold uppercase tracking-wide
                                  text-on-surface-variant">Precio</span>
                 <input
@@ -354,7 +360,7 @@ export default function EditorCatalogo({
               </label>
               <button type="submit"
                       disabled={ocupado || !nuevoArticulo.nombre.trim() || !nuevoArticulo.precio}
-                      className="ml-auto rounded-zp border-2 border-outline bg-primary px-5 py-2
+                      className="shrink-0 rounded-zp border-2 border-outline bg-primary px-5 py-2
                                  text-zp-body font-extrabold uppercase tracking-wide
                                  text-on-primary disabled:bg-surface-container-high
                                  disabled:text-on-surface-variant">

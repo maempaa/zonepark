@@ -94,6 +94,14 @@ button, a[role="button"], input, select {
   outline-offset: 2px;
 }
 
+/* El signo de pesos va fuera del input para que no se pueda borrar, así
+   que el borde y el foco los lleva la caja: sin esto el trazo de arriba
+   rodearía solo los números y dejaría el "$" afuera. */
+.campo-moneda:focus-within {
+  outline: 3px solid var(--color-on-surface);
+  outline-offset: 2px;
+}
+
 /* ── Panel de plataforma ────────────────────────────────────────────────
    Los 56px de alto vienen de operar con una mano y con guantes en la
    caseta. En un escritorio con ratón esa razón no aplica, y a esa altura
