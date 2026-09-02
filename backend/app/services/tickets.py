@@ -187,6 +187,7 @@ async def abrir_ticket(
     membership_id: uuid.UUID | None,
     forzar: bool = False,
     observaciones: str | None = None,
+    opcion_cobro: str | None = None,
 ) -> Ticket:
     placa = _validar_placa(tipo, normalizar_placa(placa))
 
@@ -205,6 +206,14 @@ async def abrir_ticket(
     )
     reglas = await reglas_del_plan(session, plan=plan, vehicle_type_id=tipo.id)
 
+    # Se valida contra las reglas que van a quedar congeladas en el ticket,
+    # no contra las del plan: si se acepta un código que el snapshot no
+    # contiene, el cobro no encontraría con qué liquidar.
+    if opcion_cobro is not None:
+        elegibles = {r.codigo for r in reglas if r.franja is None}
+        if opcion_cobro not in elegibles:
+            raise OpcionDesconocida(opcion_cobro)
+
     numero = await _siguiente_consecutivo(session, sede)
     ticket = Ticket(
         tenant_id=tenant.id,
@@ -218,6 +227,7 @@ async def abrir_ticket(
         placa=placa,
         entrada_at=entrada,
         estado=EstadoTicket.ABIERTO,
+        opcion_cobro=opcion_cobro,
         operario_entrada_id=membership_id,
         rate_snapshot=congelar(
             reglas, plan_codigo=plan.codigo, plan_version=plan.version
@@ -302,35 +312,55 @@ def _nombre_de(regla: ReglaTarifaria) -> str:
 async def opciones_de_cobro(
     session: AsyncSession, *, tenant: Tenant, ticket: Ticket, ahora: datetime
 ) -> list[OpcionCobro]:
-    """Las formas en que se le puede cobrar a este ticket, ya cotizadas."""
+    """Las formas en que se le puede cobrar a este ticket, ya cotizadas.
+
+    Hay dos escenarios y conviene no mezclarlos.
+
+    **Sin tarifa acordada** (`opcion_cobro` nulo) la primera opción es la
+    que calcula el motor con todas las reglas, que es la que respeta las
+    franjas nocturna y de festivo. Es como se comportaron todos los
+    tickets antes de que la tarifa se eligiera al entrar.
+
+    **Con tarifa acordada** esa manda y la automática deja de ofrecerse: si
+    al cliente se le prometió "por hora" al recibirle el carro, aparecerle
+    la nocturna en la salida es exactamente la discusión que el acuerdo
+    venía a evitar. Quien cobra todavía puede elegir otra de la lista, pero
+    a sabiendas.
+    """
     if ticket.estado is EstadoTicket.ANULADO:
         raise TicketNoOperable("El ticket está anulado")
 
     sede = await session.get(ParkingLot, ticket.parking_lot_id)
     hasta = ticket.salida_at or ahora
     reglas = descongelar(ticket.rate_snapshot)
+    acordada = ticket.opcion_cobro
 
-    automatica = await _cotizar(session, tenant=tenant, ticket=ticket, sede=sede, hasta=hasta)
-    opciones = [
-        OpcionCobro(
-            codigo=automatica.regla_aplicada,
-            nombre=_nombre_de(
-                next(r for r in reglas if r.codigo == automatica.regla_aplicada)
-            ),
+    async def automatica() -> OpcionCobro:
+        c = await _cotizar(session, tenant=tenant, ticket=ticket, sede=sede, hasta=hasta)
+        return OpcionCobro(
+            codigo=c.regla_aplicada,
+            nombre=_nombre_de(next(r for r in reglas if r.codigo == c.regla_aplicada)),
             recomendada=True,
-            cotizacion=automatica,
+            cotizacion=c,
         )
-    ]
 
-    vistas = {(opciones[0].nombre, opciones[0].cotizacion.total)}
+    opciones: list[OpcionCobro] = []
+    vistas: set[tuple[str, Decimal]] = set()
+    omitir: str | None = None
+
+    if acordada is None:
+        primera = await automatica()
+        opciones.append(primera)
+        vistas.add((primera.nombre, primera.cotizacion.total))
+        omitir = primera.codigo
 
     for regla in reglas:
-        if regla.codigo == automatica.regla_aplicada:
+        if regla.codigo == omitir:
             continue
         # Las reglas con franja —la nocturna, la de festivo— no son una
-        # elección de quien cobra: son variantes horarias que ya aplica la
-        # automática. Ofrecerlas sueltas mostraría dos opciones idénticas
-        # sin forma de distinguirlas.
+        # elección de quien cobra: son variantes horarias que solo entran
+        # por la vía automática. Ofrecerlas sueltas mostraría dos opciones
+        # idénticas sin forma de distinguirlas.
         if regla.franja is not None:
             continue
         suelta = replace(regla, prioridad=0)
@@ -343,10 +373,14 @@ async def opciones_de_cobro(
             # Una regla que no sabe cotizar —una mensualidad, por ejemplo—
             # no se ofrece en vez de romper la pantalla de cobro.
             continue
+
         # Dos opciones que se llaman igual y cuestan lo mismo no son dos
-        # opciones: son una pregunta sin respuesta para quien cobra.
+        # opciones: son una pregunta sin respuesta para quien cobra. La
+        # acordada se salva de esa poda: es la que se va a cobrar y tiene
+        # que estar con su propio código, o el pago quedaría registrado
+        # con el de otra regla.
         nombre = _nombre_de(regla)
-        if (nombre, cotizacion.total) in vistas:
+        if (nombre, cotizacion.total) in vistas and regla.codigo != acordada:
             continue
         vistas.add((nombre, cotizacion.total))
 
@@ -354,10 +388,23 @@ async def opciones_de_cobro(
             OpcionCobro(
                 codigo=regla.codigo,
                 nombre=nombre,
-                recomendada=False,
+                recomendada=regla.codigo == acordada,
                 cotizacion=cotizacion,
             )
         )
+
+    if acordada is not None:
+        i = next((n for n, o in enumerate(opciones) if o.codigo == acordada), None)
+        if i is None:
+            # El plan cambió y el snapshot ya no trae la regla acordada.
+            # No se puede honrar, pero dejar el ticket sin poder cobrarse
+            # sería peor: se cae a la automática y quien cobra lo ve.
+            opciones.insert(0, await automatica())
+        elif i != 0:
+            opciones.insert(0, opciones.pop(i))
+
+    if not opciones:
+        opciones.append(await automatica())
 
     return opciones
 

@@ -12,6 +12,7 @@ from app.api.v1 import (
     reportes,
     sedes,
     tarifas,
+    tarifas_ingreso,
     tickets,
 )
 
@@ -34,6 +35,7 @@ tenant_router.include_router(sedes.router)
 tenant_router.include_router(config.router)
 tenant_router.include_router(catalogo.router)
 tenant_router.include_router(tarifas.router)
+tenant_router.include_router(tarifas_ingreso.router)
 tenant_router.include_router(tickets.router)
 tenant_router.include_router(caja.router)
 tenant_router.include_router(reportes.router)

@@ -71,6 +71,9 @@ class ReciboPublico:
     lineas: list[LineaRecibo]
     total: Decimal
     tarifa: str | None
+    # La tarifa se pactó al recibir el vehículo, no la eligió el motor.
+    # Cambia lo que la pantalla puede prometerle al cliente.
+    acordada: bool
     estimado: bool
     en_cortesia: bool
 
@@ -100,6 +103,7 @@ async def recibo_publico(
         "entrada_at": ticket.entrada_at,
         "salida_at": ticket.salida_at,
         "estado": ticket.estado.value,
+        "acordada": ticket.opcion_cobro is not None,
         "calculado_at": ahora,
     }
 

@@ -39,6 +39,7 @@ class ReciboPublicoOut(BaseModel):
     lineas: list[LineaReciboOut]
     total: Decimal
     tarifa: str | None
+    acordada: bool
     estimado: bool
     en_cortesia: bool
 

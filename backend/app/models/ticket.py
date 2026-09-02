@@ -86,6 +86,11 @@ class Ticket(UUIDPk, TenantScoped, Timestamps, Base):
         String(32), nullable=False, index=True, unique=True
     )
 
+    # La forma de cobro acordada al recibir el vehículo. Nulo = la que
+    # aplique automáticamente, que es la única vía por la que entran las
+    # franjas nocturna y de festivo.
+    opcion_cobro: Mapped[str | None] = mapped_column(String(48))
+
     entrada_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     salida_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

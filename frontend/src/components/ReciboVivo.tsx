@@ -34,6 +34,7 @@ export interface Recibo {
   lineas: Linea[];
   total: string;
   tarifa: string | null;
+  acordada: boolean;
   estimado: boolean;
   en_cortesia: boolean;
   calculado_at: string;
@@ -213,7 +214,12 @@ export default function ReciboVivo({ tenant, token, inicial }: Props) {
             {recibo.en_cortesia ? 'Sin cobro' : pesos(recibo.total)}
           </p>
           {recibo.tarifa && (
-            <p className="mt-2 text-zp-body text-on-surface-variant">{recibo.tarifa}</p>
+            <p className="mt-2 text-zp-body">
+              {recibo.acordada && (
+                <span className="text-on-surface-variant">Tarifa acordada: </span>
+              )}
+              <span className="font-semibold">{recibo.tarifa}</span>
+            </p>
           )}
 
           {recibo.lineas.length > 1 && (
@@ -233,8 +239,9 @@ export default function ReciboVivo({ tenant, token, inicial }: Props) {
 
           {recibo.estimado && (
             <p className="mt-4 text-zp-caption text-on-surface-variant">
-              Valor estimado, se actualiza solo. El monto definitivo lo confirma
-              el operario al momento de salir.
+              {recibo.acordada
+                ? 'Calculado con la tarifa que acordaste al dejar tu vehículo. Sube con el tiempo y se actualiza solo.'
+                : 'Valor estimado, se actualiza solo. El monto definitivo lo confirma el operario al momento de salir.'}
               {sinConexion && ' Sin conexión: puede estar desactualizado.'}
             </p>
           )}

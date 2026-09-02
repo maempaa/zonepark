@@ -119,7 +119,10 @@ async def registrar_ingreso(
             membership_id=identidad.membership_id,
             forzar=datos.forzar,
             observaciones=datos.observaciones,
+            opcion_cobro=datos.opcion_cobro,
         )
+    except OpcionDesconocida as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e)) from e
     except PlacaConTicketAbierto as e:
         # D6: se advierte con el ticket existente para que el operario
         # decida si fue un error de digitación o son dos vehículos.

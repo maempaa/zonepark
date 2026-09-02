@@ -19,6 +19,8 @@ interface Ticket {
   placa: string | null;
   entrada_at: string;
   estado: string;
+  /** La que se pactó al recibir el vehículo. Nulo = no se pactó ninguna. */
+  opcion_cobro: string | null;
 }
 interface Linea { concepto: string; monto: string; detalle: string | null }
 interface Cotizacion {
@@ -308,7 +310,11 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
                     <span className="min-w-0">
                       <span className="block text-zp-body font-bold">{o.nombre}</span>
                       {o.recomendada && (
-                        <span className="block text-zp-caption">tarifa vigente</span>
+                        <span className="block text-zp-caption">
+                          {ticket.opcion_cobro === o.codigo
+                            ? 'acordada al ingresar'
+                            : 'tarifa vigente'}
+                        </span>
                       )}
                     </span>
                     <span className="shrink-0 text-zp-lg font-extrabold tabular-nums">

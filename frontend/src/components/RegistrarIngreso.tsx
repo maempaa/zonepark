@@ -45,6 +45,17 @@ interface Sede {
   codigo: string;
   nombre: string;
 }
+interface OpcionTarifa {
+  codigo: string;
+  nombre: string;
+  descripcion: string;
+  predeterminada: boolean;
+}
+interface TarifasDeTipo {
+  vehicle_type_id: string;
+  admite_automatica: boolean;
+  opciones: OpcionTarifa[];
+}
 interface Articulo {
   codigo: string;
   nombre: string;
@@ -61,7 +72,13 @@ type Estado =
   | { fase: 'form' }
   | { fase: 'enviando' }
   | { fase: 'duplicada'; existente: TicketAbierto }
-  | { fase: 'listo'; codigo: string; placa: string | null; token: string }
+  | {
+      fase: 'listo';
+      codigo: string;
+      placa: string | null;
+      token: string;
+      tarifa: string;
+    }
   | { fase: 'error'; mensaje: string };
 
 function pesos(valor: string | number): string {
@@ -96,23 +113,91 @@ function IconoError() {
   );
 }
 
+/** Una forma de cobro entre las que elige el operario al recibir. */
+function Tarifa({
+  marcada, onElegir, nombre, descripcion,
+}: {
+  marcada: boolean;
+  onElegir: () => void;
+  nombre: string;
+  descripcion: string;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-4 rounded-zp border-2 border-outline
+                  px-4 py-3 transition ${
+                    marcada
+                      ? 'bg-primary text-on-primary'
+                      : 'bg-surface-container-lowest active:bg-surface-container'
+                  }`}
+    >
+      <input
+        type="radio"
+        name="tarifa"
+        checked={marcada}
+        onChange={onElegir}
+        className="mt-1 h-6 w-6 shrink-0"
+      />
+      <span className="min-w-0">
+        <span className="block text-zp-body font-bold">{nombre}</span>
+        {descripcion && (
+          <span className={`block text-zp-caption ${
+            marcada ? 'text-on-primary/80' : 'text-on-surface-variant'
+          }`}>
+            {descripcion}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
 interface Props {
   tenant: string;
   sedes: Sede[];
   tipos: Tipo[];
   articulos: Articulo[];
+  tarifas: TarifasDeTipo[];
 }
 
-export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Props) {
+export default function RegistrarIngreso({
+  tenant, sedes, tipos, articulos, tarifas: tarifasIniciales,
+}: Props) {
   const [sede, setSede] = useState(sedes[0]?.id ?? '');
   const [tipo, setTipo] = useState(tipos[0]?.id ?? '');
   const [placa, setPlaca] = useState('');
   const [elegidos, setElegidos] = useState<string[]>([]);
+  const [tarifas, setTarifas] = useState(tarifasIniciales);
+  // `null` = la que aplique automáticamente. Es la única vía por la que
+  // entran la tarifa nocturna y la de festivo.
+  const [opcion, setOpcion] = useState<string | null>(null);
   const [estado, setEstado] = useState<Estado>({ fase: 'form' });
   const campoPlaca = useRef<HTMLInputElement>(null);
 
   const tipoActual = tipos.find((t) => t.id === tipo);
   const necesitaPlaca = tipoActual?.requiere_placa ?? true;
+  const tarifaActual = tarifas.find((t) => t.vehicle_type_id === tipo) ?? null;
+
+  // Las tarifas son del plan de la sede, así que cambiar de caseta cambia
+  // lo que se puede ofrecer.
+  useEffect(() => {
+    if (!sede || sede === sedes[0]?.id) return;
+    let vigente = true;
+    fetch(`/api/v1/t/${tenant}/tarifas/ingreso?parking_lot_id=${sede}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((datos) => { if (vigente && datos) setTarifas(datos); })
+      .catch(() => undefined);
+    return () => { vigente = false; };
+  }, [sede, tenant, sedes]);
+
+  // Al cambiar de vehículo se propone la tarifa que el parqueadero marcó
+  // como predeterminada, y "automática" donde haya franjas: es lo que
+  // preserva la tarifa nocturna si el operario no toca nada.
+  useEffect(() => {
+    if (!tarifaActual) { setOpcion(null); return; }
+    if (tarifaActual.admite_automatica) { setOpcion(null); return; }
+    setOpcion(tarifaActual.opciones.find((o) => o.predeterminada)?.codigo ?? null);
+  }, [tipo, tarifaActual]);
 
   useEffect(() => {
     if (necesitaPlaca) campoPlaca.current?.focus();
@@ -134,6 +219,7 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
           parking_lot_id: sede,
           vehicle_type_id: tipo,
           placa: placa.trim() || null,
+          opcion_cobro: opcion,
           items: elegidos.map((codigo) => ({ codigo, cantidad: 1 })),
           forzar,
         }),
@@ -157,6 +243,9 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
       setEstado({
         fase: 'listo', codigo: datos.codigo, placa: datos.placa,
         token: datos.token_publico,
+        tarifa:
+          tarifaActual?.opciones.find((o) => o.codigo === datos.opcion_cobro)?.nombre
+          ?? 'La que aplique según el horario',
       });
     } catch {
       setEstado({ fase: 'error', mensaje: 'Sin conexión con el servidor' });
@@ -166,6 +255,11 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
   function otroMas() {
     setPlaca('');
     setElegidos([]);
+    setOpcion(
+      tarifaActual && !tarifaActual.admite_automatica
+        ? (tarifaActual.opciones.find((o) => o.predeterminada)?.codigo ?? null)
+        : null,
+    );
     setEstado({ fase: 'form' });
     campoPlaca.current?.focus();
   }
@@ -187,6 +281,9 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
           {estado.placa && (
             <p className="mt-3 text-zp-body text-on-surface-variant">{estado.codigo}</p>
           )}
+          <p className="mt-4 border-t-2 border-outline-variant pt-4 text-zp-body">
+            Se cobrará: <span className="font-extrabold">{estado.tarifa}</span>
+          </p>
         </div>
 
         <EnlaceRecibo tenant={tenant} token={estado.token} codigo={estado.codigo} />
@@ -311,6 +408,40 @@ export default function RegistrarIngreso({ tenant, sedes, tipos, articulos }: Pr
           })}
         </div>
       </fieldset>
+
+      {tarifaActual && (tarifaActual.opciones.length > 1 || tarifaActual.admite_automatica) && (
+        <fieldset className="space-y-3">
+          <legend className="mb-3 text-zp-caption font-bold uppercase tracking-wide
+                             text-on-surface-variant">
+            Cómo se le va a cobrar
+          </legend>
+
+          <div className="space-y-3">
+            {tarifaActual.admite_automatica && (
+              <Tarifa
+                marcada={opcion === null}
+                onElegir={() => setOpcion(null)}
+                nombre="La que aplique según el horario"
+                descripcion="Incluye la tarifa nocturna y la de festivo"
+              />
+            )}
+            {tarifaActual.opciones.map((o) => (
+              <Tarifa
+                key={o.codigo}
+                marcada={opcion === o.codigo}
+                onElegir={() => setOpcion(o.codigo)}
+                nombre={o.nombre}
+                descripcion={o.descripcion}
+              />
+            ))}
+          </div>
+
+          <p className="text-zp-caption text-on-surface-variant">
+            Es lo que verá el cliente en su recibo. Quien cobre puede cambiarlo en la
+            salida.
+          </p>
+        </fieldset>
+      )}
 
       <label className="block space-y-2">
         <span className="text-zp-caption font-bold uppercase tracking-wide text-on-surface-variant">

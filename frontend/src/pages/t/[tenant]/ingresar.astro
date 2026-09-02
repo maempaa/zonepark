@@ -23,6 +23,14 @@ const [sedesRes, tiposRes, articulosRes] = await Promise.all([
 const sedes = sedesRes?.ok ? await sedesRes.json() : [];
 const tipos = tiposRes?.ok ? await tiposRes.json() : [];
 const articulos = articulosRes?.ok ? await articulosRes.json() : [];
+
+// Las tarifas de la primera sede vienen ya resueltas: es la que el
+// formulario propone, y esperar a que el navegador las pida dejaría el
+// selector en blanco justo al abrir la pantalla que más se usa.
+const tarifasRes = sedes[0]
+  ? await llamarApi(Astro.cookies, tenant!, `/tarifas/ingreso?parking_lot_id=${sedes[0].id}`)
+  : null;
+const tarifas = tarifasRes?.ok ? await tarifasRes.json() : [];
 ---
 <Base titulo="Nuevo ingreso">
   <CabeceraPantalla titulo="Nuevo ingreso" volverA={`/t/${tenant}`} etiquetaVolver="Volver al tablero" />
@@ -39,6 +47,7 @@ const articulos = articulosRes?.ok ? await articulosRes.json() : [];
         sedes={sedes}
         tipos={tipos}
         articulos={articulos}
+      tarifas={tarifas}
         client:load
       />
     )}

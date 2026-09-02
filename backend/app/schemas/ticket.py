@@ -20,6 +20,10 @@ class IngresoIn(BaseModel):
     vehicle_type_id: uuid.UUID
     placa: str | None = Field(default=None, max_length=16)
     observaciones: str | None = Field(default=None, max_length=300)
+    # La tarifa acordada con el cliente al recibirle el vehículo. Nulo =
+    # la que aplique automáticamente, que es la única vía por la que entran
+    # las franjas nocturna y de festivo.
+    opcion_cobro: str | None = Field(default=None, max_length=48)
     # D6: el operario confirma que de verdad son dos ingresos distintos.
     forzar: bool = False
     # Artículos entregados en el momento del ingreso: el casco que se guarda
@@ -67,6 +71,7 @@ class TicketOut(BaseModel):
     entrada_at: datetime
     salida_at: datetime | None
     estado: EstadoTicket
+    opcion_cobro: str | None
     observaciones: str | None
 
 

@@ -272,6 +272,10 @@ Cubren, entre otras cosas:
 Quien deja el vehículo puede ver, desde su propio celular y sin instalar
 nada, cuánto lleva corriendo su ticket.
 
+- **La tarifa se acuerda al entrar.** Al registrar el ingreso el operario
+  elige con qué tarifa se va a cobrar, y el recibo del cliente calcula con
+  esa. Quien cobra puede cambiarla en la salida, pero por defecto se
+  liquida lo prometido.
 - **Cómo llega.** Cada ticket nace con un `token_publico` de 128 bits. Al
   registrar el ingreso —y también desde el detalle del ticket, si el
   cliente lo perdió— el operario ve un botón para compartir el enlace por
