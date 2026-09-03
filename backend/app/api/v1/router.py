@@ -6,6 +6,7 @@ from app.api.v1 import (
     caja,
     catalogo,
     config,
+    contactos,
     health,
     meta,
     publico,
@@ -37,6 +38,7 @@ tenant_router.include_router(catalogo.router)
 tenant_router.include_router(tarifas.router)
 tenant_router.include_router(tarifas_ingreso.router)
 tenant_router.include_router(tickets.router)
+tenant_router.include_router(contactos.router)
 tenant_router.include_router(caja.router)
 tenant_router.include_router(reportes.router)
 

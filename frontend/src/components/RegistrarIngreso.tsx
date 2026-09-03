@@ -154,6 +154,7 @@ function Tarifa({
 
 interface Props {
   tenant: string;
+  parqueadero: string;
   sedes: Sede[];
   tipos: Tipo[];
   articulos: Articulo[];
@@ -161,7 +162,7 @@ interface Props {
 }
 
 export default function RegistrarIngreso({
-  tenant, sedes, tipos, articulos, tarifas: tarifasIniciales,
+  tenant, parqueadero, sedes, tipos, articulos, tarifas: tarifasIniciales,
 }: Props) {
   const [sede, setSede] = useState(sedes[0]?.id ?? '');
   const [tipo, setTipo] = useState(tipos[0]?.id ?? '');
@@ -286,7 +287,13 @@ export default function RegistrarIngreso({
           </p>
         </div>
 
-        <EnlaceRecibo tenant={tenant} token={estado.token} codigo={estado.codigo} />
+        <EnlaceRecibo
+          tenant={tenant}
+          token={estado.token}
+          codigo={estado.codigo}
+          placa={estado.placa}
+          parqueadero={parqueadero}
+        />
 
         <button
           onClick={otroMas}

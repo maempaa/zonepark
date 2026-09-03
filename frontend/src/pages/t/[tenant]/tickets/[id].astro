@@ -80,6 +80,8 @@ const puedeCobrar = perfil.permisos.includes('ticket:checkout');
           tenant={tenant!}
           token={ticket.token_publico}
           codigo={ticket.codigo}
+          placa={ticket.placa}
+          parqueadero={perfil.tenant_nombre}
           client:load
         />
       </div>

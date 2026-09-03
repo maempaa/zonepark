@@ -79,6 +79,7 @@ from app.models import (  # noqa: E402,F401
     audit,
     caja,
     catalogo,
+    contacto,
     device,
     parking_lot,
     rbac,

@@ -48,6 +48,7 @@ const tarifas = tarifasRes?.ok ? await tarifasRes.json() : [];
         tipos={tipos}
         articulos={articulos}
       tarifas={tarifas}
+      parqueadero={perfil.tenant_nombre}
         client:load
       />
     )}
