@@ -1,4 +1,4 @@
-"""A qué número se le manda el recibo de cada placa."""
+"""A dónde se le manda el recibo de cada placa."""
 
 from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,7 +17,8 @@ class PlateContact(UUIDPk, TenantScoped, Timestamps, Base):
     # Como lo tecleó el operario. Convertirlo al formato de WhatsApp es
     # cosa de quien arma el enlace, no de lo que se guarda: así el número
     # se sigue leyendo igual que en la agenda de quien lo dictó.
-    telefono: Mapped[str] = mapped_column(String(24), nullable=False)
+    telefono: Mapped[str | None] = mapped_column(String(24))
+    correo: Mapped[str | None] = mapped_column(String(160))
 
     def __repr__(self) -> str:
         return f"<PlateContact {self.placa}>"

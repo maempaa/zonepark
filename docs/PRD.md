@@ -278,10 +278,13 @@ nada, cuánto lleva corriendo su ticket.
   liquida lo prometido.
 - **Cómo llega.** Cada ticket nace con un `token_publico` de 128 bits. Al
   registrar el ingreso —y también desde el detalle del ticket, si el
-  cliente lo perdió— el operario teclea el WhatsApp del cliente y el botón
-  abre la conversación con el enlace ya escrito. El número queda guardado
-  contra la placa: la próxima visita de ese vehículo ya viene puesto, y se
-  puede borrar desde el mismo sitio. El consecutivo (`S1-000002`) y la placa no sirven
+  cliente lo perdió— el operario elige WhatsApp o correo. Por WhatsApp
+  teclea el número y el botón abre la conversación con el enlace ya
+  escrito; por correo teclea la dirección, elige con qué redactor escribe
+  —Gmail, Outlook, Yahoo o la aplicación del dispositivo— y se abre el
+  borrador listo. Los dos datos quedan guardados contra la placa, y
+  guardar uno no borra el otro: la próxima visita de ese vehículo ya
+  vienen puestos, y se pueden borrar desde el mismo sitio. El consecutivo (`S1-000002`) y la placa no sirven
   como credencial: el primero es adivinable y la segunda está a la vista
   en el parabrisas.
 - **Qué muestra.** Nombre del parqueadero y de la sede, dirección,

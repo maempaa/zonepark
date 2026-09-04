@@ -9,8 +9,11 @@ import pytest
 from app.db.session import tenant_scope
 from app.models.tenant import Tenant
 from app.services.contactos import (
+    CorreoInvalido,
+    SinDondeMandarlo,
     TelefonoInvalido,
     contacto_de,
+    normalizar_correo,
     normalizar_telefono,
     olvidar,
     recordar,
@@ -114,3 +117,65 @@ async def test_un_numero_invalido_se_rechaza(dos_tenants, client):
         f"/api/v1/t/{a.slug}/contactos/ABC123", headers=cab, json={"telefono": "no-es"},
     )
     assert r.status_code == 422
+
+
+# ── El correo ────────────────────────────────────────────────────────────
+
+def test_el_correo_se_recorta_y_baja_a_minusculas():
+    assert normalizar_correo("  Ana.Perez@Gmail.COM ") == "ana.perez@gmail.com"
+
+
+def test_lo_que_no_tiene_forma_de_correo_se_rechaza():
+    for malo in ["", "ana", "ana@", "@gmail.com", "ana perez@gmail.com", "ana@gmail"]:
+        with pytest.raises(CorreoInvalido):
+            normalizar_correo(malo)
+
+
+async def test_guardar_el_correo_no_borra_el_whatsapp(dos_tenants):
+    """Quien manda el recibo por correo hoy no pierde el número de ayer."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant = await session.get(Tenant, a.id)
+        await recordar(session, tenant=tenant, placa="ABC123", telefono="3105550101")
+        await recordar(session, tenant=tenant, placa="ABC123", correo="ana@gmail.com")
+
+        c = await contacto_de(session, placa="ABC123")
+        assert c.telefono == "3105550101"
+        assert c.correo == "ana@gmail.com"
+
+
+async def test_se_puede_guardar_solo_el_correo(dos_tenants):
+    """Un cliente que solo da su correo no obliga a inventarse un número."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant = await session.get(Tenant, a.id)
+        c = await recordar(session, tenant=tenant, placa="XYZ789", correo="ana@gmail.com")
+        assert c.telefono is None
+        assert c.correo == "ana@gmail.com"
+
+
+async def test_sin_ninguno_de_los_dos_no_hay_nada_que_guardar(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tenant = await session.get(Tenant, a.id)
+        with pytest.raises(SinDondeMandarlo):
+            await recordar(session, tenant=tenant, placa="ABC123", telefono="  ")
+
+
+async def test_el_correo_por_la_api(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = cabecera(await entrar(client, a.slug, a.admin))
+    ruta = f"/api/v1/t/{a.slug}/contactos/ABC123"
+
+    r = await client.put(ruta, headers=cab, json={"correo": "Ana@Gmail.com"})
+    assert r.status_code == 200
+    assert r.json() == {"placa": "ABC123", "telefono": None, "correo": "ana@gmail.com"}
+
+    r = await client.put(ruta, headers=cab, json={"telefono": "310 555 0101"})
+    assert r.json()["correo"] == "ana@gmail.com", "el correo sobrevive"
+    assert r.json()["telefono"] == "3105550101"
+
+    assert (await client.put(ruta, headers=cab, json={})).status_code == 422
+    assert (
+        await client.put(ruta, headers=cab, json={"correo": "no-es-correo"})
+    ).status_code == 422
