@@ -78,6 +78,7 @@ type Estado =
       placa: string | null;
       token: string;
       tarifa: string;
+      verificacion: string;
     }
   | { fase: 'error'; mensaje: string };
 
@@ -244,6 +245,7 @@ export default function RegistrarIngreso({
       setEstado({
         fase: 'listo', codigo: datos.codigo, placa: datos.placa,
         token: datos.token_publico,
+        verificacion: datos.codigo_verificacion,
         tarifa:
           tarifaActual?.opciones.find((o) => o.codigo === datos.opcion_cobro)?.nombre
           ?? 'La que aplique según el horario',
@@ -285,6 +287,19 @@ export default function RegistrarIngreso({
           <p className="mt-4 border-t-2 border-outline-variant pt-4 text-zp-body">
             Se cobrará: <span className="font-extrabold">{estado.tarifa}</span>
           </p>
+
+          {/* Por si se le anota al cliente en un papel: en el recibo que
+              se le manda va el mismo número. */}
+          <div className="mt-4 rounded-zp border-2 border-dashed border-outline px-4 py-3">
+            <p className="text-zp-caption font-bold uppercase tracking-wide
+                          text-on-surface-variant">
+              Código de verificación
+            </p>
+            <p className="mt-1 text-zp-2xl font-extrabold leading-none tracking-[0.25em]
+                          tabular-nums">
+              {estado.verificacion}
+            </p>
+          </div>
         </div>
 
         <EnlaceRecibo

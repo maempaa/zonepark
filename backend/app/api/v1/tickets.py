@@ -68,6 +68,7 @@ def _detalle(ticket: Ticket) -> TicketDetalleOut:
     return TicketDetalleOut(
         **TicketOut.model_validate(ticket).model_dump(),
         token_publico=ticket.token_publico,
+        codigo_verificacion=ticket.codigo_verificacion,
         items=list(ticket.items),
         anulacion_motivo=ticket.anulacion_motivo,
         plan_codigo=snapshot.get("plan_codigo"),

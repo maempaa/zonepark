@@ -29,6 +29,7 @@ class ReciboPublicoOut(BaseModel):
     terminos: str
 
     codigo: str
+    codigo_verificacion: str | None
     placa: str | None
     vehiculo: str
     entrada_at: datetime

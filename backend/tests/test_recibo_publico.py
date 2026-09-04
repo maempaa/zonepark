@@ -208,3 +208,72 @@ async def test_el_reglamento_se_edita_desde_la_configuracion(dos_tenants, client
     )
     assert r.json()["terminos_condiciones"] is None
     assert r.json()["terminos_efectivos"] == TERMINOS_POR_DEFECTO
+
+
+# ── Código de verificación ───────────────────────────────────────────────
+
+async def test_cada_ticket_nace_con_su_codigo_de_cinco_cifras(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        uno = await _abrir(session, a)
+        otro = await _abrir(session, a, placa="XYZ789")
+
+    for t in (uno, otro):
+        assert len(t.codigo_verificacion) == 5
+        assert t.codigo_verificacion.isdigit()
+        assert not t.codigo_verificacion.startswith("0"), "se dicta sin explicar ceros"
+
+
+async def test_el_codigo_no_se_deduce_del_ticket(dos_tenants):
+    """Si saliera del consecutivo o de la placa no sería una contraseña:
+    los dos están a la vista de cualquiera."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        tickets = [await _abrir(session, a, placa=f"AAA{n:03d}") for n in range(12)]
+
+    codigos = {t.codigo_verificacion for t in tickets}
+    assert len(codigos) == len(tickets), "se repitieron: no son aleatorios"
+    for t in tickets:
+        assert t.codigo_verificacion not in t.codigo
+        assert t.codigo_verificacion not in (t.placa or "")
+
+
+async def test_el_cliente_lo_ve_mientras_el_vehiculo_esta_adentro(dos_tenants):
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        ticket = await _abrir(session, a)
+        tenant = await session.get(Tenant, a.id)
+        r = await recibo_publico(
+            session, tenant=tenant, token=ticket.token_publico, ahora=ENTRADA
+        )
+
+    assert r.codigo_verificacion == ticket.codigo_verificacion
+
+
+async def test_deja_de_publicarse_al_cerrar(dos_tenants):
+    """El enlace sigue circulando por WhatsApp después de la salida."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        ticket = await _abrir(session, a)
+        tenant = await session.get(Tenant, a.id)
+        salida = ENTRADA + timedelta(minutes=90)
+        await cerrar_ticket(
+            session, tenant=tenant, ticket_id=ticket.id, ahora=salida,
+            metodo=MetodoPago.EFECTIVO, recibido=Decimal("50000"), membership_id=None,
+        )
+        r = await recibo_publico(
+            session, tenant=tenant, token=ticket.token_publico, ahora=salida
+        )
+
+    assert r.codigo_verificacion is None
+
+
+async def test_quien_cobra_lo_ve_para_compararlo(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = cabecera(await entrar(client, a.slug, a.admin))
+    async with tenant_scope(a.id) as session:
+        ticket = await _abrir(session, a)
+
+    r = await client.get(f"/api/v1/t/{a.slug}/tickets/{ticket.id}", headers=cab)
+    assert r.status_code == 200
+    assert r.json()["codigo_verificacion"] == ticket.codigo_verificacion

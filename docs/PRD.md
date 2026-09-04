@@ -286,8 +286,10 @@ nada, cuánto lleva corriendo su ticket.
   en el parabrisas.
 - **Qué muestra.** Nombre del parqueadero y de la sede, dirección,
   teléfono como enlace de llamada, placa, tipo de vehículo, hora de
-  entrada, tiempo transcurrido, el monto y el aviso de responsabilidad
-  por objetos dejados en el vehículo.
+  entrada, tiempo transcurrido, el monto, el código de verificación con
+  que se entrega el vehículo, y el reglamento del parqueadero al pie.
+  Va maquetado como el papel de la impresora térmica: una sola tira,
+  bloques separados por cortes de puntos y borde inferior rasgado.
 - **Qué no muestra.** Ni quién abrió o cerró el ticket, ni contra qué
   turno de caja se cobró, ni con cuánto pagó el cliente, ni el snapshot
   de tarifas. El endpoint no reutiliza el esquema del operario, para que
@@ -303,9 +305,16 @@ nada, cuánto lleva corriendo su ticket.
 - La página va con `no-store` y `noindex`, y un token inexistente y un
   parqueadero inexistente responden igual: 404.
 
-El administrador llena dirección, teléfono y el texto del aviso en
-**Datos del parqueadero** (`/t/{slug}/config/parqueadero`). Sin aviso
-propio se muestra el de fábrica.
+El administrador llena dirección, teléfono y el reglamento en **Datos del
+parqueadero** (`/t/{slug}/config/parqueadero`). Sin reglamento propio se
+muestra el de fábrica.
+
+- **Código de verificación.** Cinco dígitos sorteados por ticket, sin
+  relación con el consecutivo ni con la placa, que están a la vista de
+  cualquiera. El cliente lo ve en su recibo; quien cobra lo ve en la
+  pantalla de cobro, antes del monto, para pedirlo y compararlo antes de
+  entregar el vehículo. Deja de publicarse en cuanto el ticket se cierra:
+  ya no sirve para nada y ese enlace sigue circulando por WhatsApp.
 
 ## 11. Lo que sigue
 

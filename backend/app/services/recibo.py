@@ -67,6 +67,10 @@ class ReciboPublico:
 
     # Qué se dejó
     codigo: str
+    # Solo mientras el vehículo está adentro. Después no sirve para nada y
+    # este enlace circula por WhatsApp: no hay razón para dejarlo escrito
+    # en una página que sigue dando vueltas.
+    codigo_verificacion: str | None
     placa: str | None
     vehiculo: str
     entrada_at: datetime
@@ -105,6 +109,11 @@ async def recibo_publico(
         "telefono": sede.telefono if sede else None,
         "terminos": tenant.terminos_condiciones or TERMINOS_POR_DEFECTO,
         "codigo": ticket.codigo,
+        "codigo_verificacion": (
+            ticket.codigo_verificacion
+            if ticket.estado is EstadoTicket.ABIERTO
+            else None
+        ),
         "placa": ticket.placa,
         "vehiculo": tipo.nombre if tipo else "Vehículo",
         "entrada_at": ticket.entrada_at,

@@ -17,6 +17,7 @@ interface Ticket {
   id: string;
   codigo: string;
   placa: string | null;
+  codigo_verificacion: string;
   entrada_at: string;
   estado: string;
   /** La que se pactó al recibir el vehículo. Nulo = no se pactó ninguna. */
@@ -500,6 +501,22 @@ export default function CobrarTicket({ tenant, ticket, articulos }: Props) {
         {ticket.placa && (
           <p className="mt-2 text-zp-caption text-on-surface-variant">{ticket.codigo}</p>
         )}
+
+        {/* Va antes del monto a propósito: se comprueba a quién se le
+            entrega el vehículo y después se cobra, no al revés. */}
+        <div className="mt-5 rounded-zp border-2 border-dashed border-outline px-4 py-3">
+          <p className="text-zp-caption font-bold uppercase tracking-wide
+                        text-on-surface-variant">
+            Código de verificación
+          </p>
+          <p className="mt-1 text-zp-2xl font-extrabold leading-none tracking-[0.25em]
+                        tabular-nums">
+            {ticket.codigo_verificacion}
+          </p>
+          <p className="mt-1.5 text-zp-caption text-on-surface-variant">
+            Pídeselo al cliente antes de entregar el vehículo.
+          </p>
+        </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 border-t-2 border-outline pt-5">
           <div>

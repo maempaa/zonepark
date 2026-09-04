@@ -31,6 +31,7 @@ export interface Recibo {
   telefono: string | null;
   terminos: string;
   codigo: string;
+  codigo_verificacion: string | null;
   placa: string | null;
   vehiculo: string;
   entrada_at: string;
@@ -196,6 +197,23 @@ export default function ReciboVivo({ tenant, token, inicial }: Props) {
             </span>
           )}
         </div>
+
+        {recibo.codigo_verificacion && (
+          <div className="mt-5 rounded-zp border-2 border-dashed border-outline
+                          px-4 py-4 text-center">
+            <p className="text-zp-caption font-bold uppercase tracking-widest
+                          text-on-surface-variant">
+              Código de verificación
+            </p>
+            <p className="mt-1 text-zp-3xl font-extrabold leading-none tracking-[0.25em]
+                          tabular-nums">
+              {recibo.codigo_verificacion}
+            </p>
+            <p className="mt-2 text-zp-caption text-on-surface-variant">
+              Muéstralo al retirar tu vehículo.
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 space-y-1.5">
           <Renglon etiqueta="Ticket">{recibo.codigo}</Renglon>

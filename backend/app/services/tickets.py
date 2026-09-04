@@ -224,6 +224,9 @@ async def abrir_ticket(
         # 128 bits. El cliente abre su recibo con esto y con nada más, así
         # que tiene que ser imposible de acertar probando.
         token_publico=secrets.token_hex(16),
+        # Entre 10000 y 99999: siempre cinco cifras, sin ceros al principio
+        # que haya que explicar al dictarlo.
+        codigo_verificacion=str(secrets.randbelow(90_000) + 10_000),
         placa=placa,
         entrada_at=entrada,
         estado=EstadoTicket.ABIERTO,

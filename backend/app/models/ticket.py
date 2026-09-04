@@ -86,6 +86,11 @@ class Ticket(UUIDPk, TenantScoped, Timestamps, Base):
         String(32), nullable=False, index=True, unique=True
     )
 
+    # Lo que el cliente muestra para llevarse el vehículo. No se deriva
+    # del consecutivo ni de la placa: los dos están a la vista de
+    # cualquiera y no servirían de contraseña.
+    codigo_verificacion: Mapped[str] = mapped_column(String(5), nullable=False)
+
     # La forma de cobro acordada al recibir el vehículo. Nulo = la que
     # aplique automáticamente, que es la única vía por la que entran las
     # franjas nocturna y de festivo.

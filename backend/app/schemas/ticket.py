@@ -79,6 +79,7 @@ class TicketDetalleOut(TicketOut):
     # Solo en el detalle, no en los listados: es la llave del recibo del
     # cliente y no hace falta repartirla en cada búsqueda.
     token_publico: str
+    codigo_verificacion: str
     items: list[ItemOut]
     anulacion_motivo: str | None
     plan_codigo: str | None = None
