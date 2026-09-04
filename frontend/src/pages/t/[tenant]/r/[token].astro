@@ -28,11 +28,11 @@ Astro.response.headers.set('cache-control', 'no-store, private');
 Astro.response.headers.set('x-robots-tag', 'noindex, nofollow');
 ---
 <Base titulo={`Recibo ${recibo.codigo}`}>
-  <main class="flex-1 px-5 py-8">
+  <main class="flex-1 px-4 py-6">
     <ReciboVivo tenant={tenant!} token={token!} inicial={recibo} client:load />
   </main>
 
-  <footer class="px-5 pb-8 pt-2 text-center">
+  <footer class="px-5 pb-8 pt-4 text-center">
     <Logo alto={28} class="mx-auto opacity-60" />
     <p class="mt-2 text-zp-caption text-on-surface-variant">
       Conserva este enlace: es tu comprobante.

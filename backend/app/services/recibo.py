@@ -32,6 +32,18 @@ from app.models.tenant import Tenant
 from app.models.ticket import Charge, EstadoTicket, Payment, Ticket
 from app.services.tickets import TicketNoOperable, opciones_de_cobro
 
+TERMINOS_POR_DEFECTO = (
+    "REGLAMENTO: El vehículo se entrega a quien presente este recibo. No se "
+    "atienden solicitudes de entrega por teléfono ni por escrito. Una vez "
+    "retirado el vehículo no se reciben reclamaciones. No respondemos por "
+    "objetos, documentos ni accesorios dejados dentro o sobre el vehículo. No "
+    "respondemos por pérdidas, deterioros o daños derivados de incendio, "
+    "terremoto, asonada, revolución u otros hechos de fuerza mayor. Es "
+    "responsabilidad del conductor mantener vigente el seguro de su vehículo. "
+    "No respondemos por daños causados por terceros, ni por cascos u objetos "
+    "dejados encima de las motocicletas."
+)
+
 AVISO_POR_DEFECTO = (
     "No nos hacemos responsables por objetos dejados dentro del vehículo, "
     "ni por accesorios exteriores. Retire sus pertenencias de valor."
@@ -57,6 +69,7 @@ class ReciboPublico:
     direccion: str | None
     telefono: str | None
     aviso: str
+    terminos: str
 
     # Qué se dejó
     codigo: str
@@ -97,6 +110,7 @@ async def recibo_publico(
         "direccion": sede.direccion if sede else None,
         "telefono": sede.telefono if sede else None,
         "aviso": tenant.aviso_responsabilidad or AVISO_POR_DEFECTO,
+        "terminos": tenant.terminos_condiciones or TERMINOS_POR_DEFECTO,
         "codigo": ticket.codigo,
         "placa": ticket.placa,
         "vehiculo": tipo.nombre if tipo else "Vehículo",

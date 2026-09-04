@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config import settings
@@ -41,6 +41,10 @@ class Tenant(UUIDPk, Timestamps, Base):
     # cuando el parqueadero escribe el suyo, para poder mejorar el de
     # fábrica sin pisarle el que ya redactó.
     aviso_responsabilidad: Mapped[str | None] = mapped_column(String(400))
+
+    # El reglamento completo, el que va al pie del recibo en letra
+    # pequeña. Vacío = el de fábrica.
+    terminos_condiciones: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[TenantStatus] = mapped_column(
         enum_column(TenantStatus, 16),

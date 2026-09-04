@@ -26,6 +26,8 @@ interface Config {
   nombre: string;
   aviso_responsabilidad: string | null;
   aviso_efectivo: string;
+  terminos_condiciones: string | null;
+  terminos_efectivos: string;
 }
 
 interface Props {
@@ -43,6 +45,7 @@ export default function DatosParqueadero({
   const [sedes, setSedes] = useState(sedesIniciales);
   const [config, setConfig] = useState(configInicial);
   const [aviso, setAviso] = useState(configInicial.aviso_responsabilidad ?? '');
+  const [terminos, setTerminos] = useState(configInicial.terminos_condiciones ?? '');
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -87,16 +90,17 @@ export default function DatosParqueadero({
     }
   }
 
-  async function guardarAviso() {
+  async function guardarTextos(campos: Record<string, string | null>, hecho: string) {
     const datos = await pedir('/config', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ aviso_responsabilidad: aviso.trim() || null }),
+      body: JSON.stringify(campos),
     });
     if (datos) {
       setConfig(datos);
       setAviso(datos.aviso_responsabilidad ?? '');
-      setOk('Aviso actualizado');
+      setTerminos(datos.terminos_condiciones ?? '');
+      setOk(hecho);
     }
   }
 
@@ -201,7 +205,13 @@ export default function DatosParqueadero({
         </p>
 
         {puedeEditarConfig && (
-          <button onClick={guardarAviso} disabled={ocupado}
+          <button
+            onClick={() =>
+              guardarTextos(
+                { aviso_responsabilidad: aviso.trim() || null }, 'Aviso actualizado',
+              )
+            }
+            disabled={ocupado}
                   className="rounded-zp border-2 border-outline bg-primary px-5 py-3
                              text-zp-body font-extrabold uppercase tracking-wide
                              text-on-primary disabled:bg-surface-container-high
@@ -213,6 +223,61 @@ export default function DatosParqueadero({
         <div className="rounded-zp border-2 border-warning bg-surface-container-lowest p-4">
           <p className={ETIQUETA}>Así lo verá el cliente</p>
           <p className="mt-2 text-zp-body">{aviso.trim() || config.aviso_efectivo}</p>
+        </div>
+      </section>
+
+      {/* ── El reglamento ───────────────────────────────────────────── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-zp-lg font-extrabold">Términos y condiciones</h2>
+          <p className="mt-1 text-zp-body text-on-surface-variant">
+            El reglamento completo, al pie del recibo y en letra pequeña. Déjalo en
+            blanco para usar el que trae ZonePark.
+          </p>
+        </div>
+
+        <label className="block space-y-1.5">
+          <span className={ETIQUETA}>Tu reglamento</span>
+          <textarea
+            value={terminos}
+            disabled={!puedeEditarConfig}
+            rows={10}
+            maxLength={2000}
+            placeholder={config.terminos_efectivos}
+            onChange={(e) => setTerminos(e.target.value)}
+            className={`${CAMPO} resize-y`}
+          />
+        </label>
+        <p className="text-zp-caption text-on-surface-variant">
+          {terminos.length}/2000
+          {!terminos.trim() && ' · en blanco se muestra el texto de ejemplo de arriba'}
+        </p>
+
+        {puedeEditarConfig && (
+          <button
+            onClick={() =>
+              guardarTextos(
+                { terminos_condiciones: terminos.trim() || null },
+                'Términos actualizados',
+              )
+            }
+            disabled={ocupado}
+            className="rounded-zp border-2 border-outline bg-primary px-5 py-3
+                       text-zp-body font-extrabold uppercase tracking-wide
+                       text-on-primary disabled:bg-surface-container-high
+                       disabled:text-on-surface-variant"
+          >
+            Guardar términos
+          </button>
+        )}
+
+        <div className="rounded-zp border-2 border-outline-variant
+                        bg-surface-container-lowest p-4">
+          <p className={ETIQUETA}>Así lo verá el cliente</p>
+          <p className="recibo-mono mt-2 text-justify text-zp-caption leading-relaxed
+                        text-on-surface-variant">
+            {terminos.trim() || config.terminos_efectivos}
+          </p>
         </div>
       </section>
     </div>

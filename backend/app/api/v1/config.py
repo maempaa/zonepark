@@ -10,7 +10,7 @@ from app.deps import IdentidadDep, SesionDep, TenantDep, requiere
 from app.models.tenant import Tenant
 from app.schemas.config import ConfigOut, ConfigUpdate
 from app.services import audit
-from app.services.recibo import AVISO_POR_DEFECTO
+from app.services.recibo import AVISO_POR_DEFECTO, TERMINOS_POR_DEFECTO
 
 router = APIRouter(prefix="/config", tags=["configuracion"])
 
@@ -20,6 +20,8 @@ def _salida(tenant: Tenant) -> ConfigOut:
         nombre=tenant.nombre,
         aviso_responsabilidad=tenant.aviso_responsabilidad,
         aviso_efectivo=tenant.aviso_responsabilidad or AVISO_POR_DEFECTO,
+        terminos_condiciones=tenant.terminos_condiciones,
+        terminos_efectivos=tenant.terminos_condiciones or TERMINOS_POR_DEFECTO,
         timezone=tenant.timezone,
         currency=tenant.currency,
     )
@@ -49,7 +51,7 @@ async def editar_config(
     # traerlo a ella para que el UPDATE salga de verdad.
     vivo = await session.get(Tenant, tenant.id)
     for campo, valor in cambios.items():
-        if campo == "aviso_responsabilidad" and valor is not None:
+        if campo in ("aviso_responsabilidad", "terminos_condiciones") and valor is not None:
             valor = valor.strip() or None
         setattr(vivo, campo, valor)
     await session.flush()

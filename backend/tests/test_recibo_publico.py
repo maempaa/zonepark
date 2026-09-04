@@ -16,8 +16,15 @@ from app.models.catalogo import VehicleType
 from app.models.parking_lot import ParkingLot
 from app.models.tenant import Tenant
 from app.models.ticket import MetodoPago
-from app.services.recibo import AVISO_POR_DEFECTO, ReciboNoEncontrado, recibo_publico
+from app.services.recibo import (
+    AVISO_POR_DEFECTO,
+    TERMINOS_POR_DEFECTO,
+    ReciboNoEncontrado,
+    recibo_publico,
+)
 from app.services.tickets import abrir_ticket, cerrar_ticket
+
+from .conftest import cabecera, entrar
 
 ENTRADA = datetime(2026, 8, 24, 13, 0, tzinfo=UTC)
 
@@ -178,3 +185,46 @@ async def test_un_token_con_forma_rara_se_rechaza_sin_tocar_la_base(dos_tenants,
     for malo in ["../../etc/passwd", "abc", "Z" * 32, "' OR 1=1--"]:
         r = await client.get(f"/api/v1/t/{a.slug}/publico/recibo/{malo}")
         assert r.status_code in (404, 422), malo
+
+
+async def test_el_reglamento_va_en_el_recibo(dos_tenants):
+    """Sin configurar sale el de fábrica; configurado, el del parqueadero."""
+    a, _ = dos_tenants
+    async with tenant_scope(a.id) as session:
+        ticket = await _abrir(session, a)
+        tenant = await session.get(Tenant, a.id)
+
+        r = await recibo_publico(
+            session, tenant=tenant, token=ticket.token_publico, ahora=ENTRADA
+        )
+        assert r.terminos == TERMINOS_POR_DEFECTO
+
+        tenant.terminos_condiciones = "El que llega tarde paga doble."
+        r2 = await recibo_publico(
+            session, tenant=tenant, token=ticket.token_publico, ahora=ENTRADA
+        )
+        assert r2.terminos == "El que llega tarde paga doble."
+
+
+async def test_el_reglamento_se_edita_desde_la_configuracion(dos_tenants, client):
+    a, _ = dos_tenants
+    cab = cabecera(await entrar(client, a.slug, a.admin))
+
+    r = await client.get(f"/api/v1/t/{a.slug}/config", headers=cab)
+    assert r.status_code == 200
+    assert r.json()["terminos_condiciones"] is None
+    assert r.json()["terminos_efectivos"] == TERMINOS_POR_DEFECTO
+
+    r = await client.patch(
+        f"/api/v1/t/{a.slug}/config", headers=cab,
+        json={"terminos_condiciones": "  Reglamento propio.  "},
+    )
+    assert r.status_code == 200
+    assert r.json()["terminos_condiciones"] == "Reglamento propio."
+
+    # Vaciarlo devuelve el de fábrica en vez de dejar el recibo sin reglamento.
+    r = await client.patch(
+        f"/api/v1/t/{a.slug}/config", headers=cab, json={"terminos_condiciones": "   "},
+    )
+    assert r.json()["terminos_condiciones"] is None
+    assert r.json()["terminos_efectivos"] == TERMINOS_POR_DEFECTO

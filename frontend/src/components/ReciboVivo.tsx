@@ -1,6 +1,12 @@
 /**
  * El recibo que ve el cliente mientras su vehículo está adentro.
  *
+ * Va maquetado como el papel que sale de la impresora de la caseta —una
+ * sola tira, bloques separados por cortes de puntos, borde inferior
+ * rasgado— porque es lo que la gente reconoce como "el recibo del
+ * parqueadero". El monoespaciado es parte de eso: alinea las cifras en
+ * columna sin tablas.
+ *
  * Dos relojes distintos, y la diferencia importa. El tiempo transcurrido
  * se cuenta en el navegador cada segundo, porque una cifra congelada
  * parece una pantalla rota. El **monto** solo cambia cuando el servidor
@@ -24,6 +30,7 @@ export interface Recibo {
   direccion: string | null;
   telefono: string | null;
   aviso: string;
+  terminos: string;
   codigo: string;
   placa: string | null;
   vehiculo: string;
@@ -46,9 +53,15 @@ function pesos(v: string | number): string {
   }).format(Number(v));
 }
 
-function reloj(d: string): string {
-  return new Date(d).toLocaleString('es-CO', {
-    day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+function hora(d: string): string {
+  return new Date(d).toLocaleTimeString('es-CO', {
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  });
+}
+
+function fecha(d: string): string {
+  return new Date(d).toLocaleDateString('es-CO', {
+    day: '2-digit', month: 'short', year: 'numeric',
   });
 }
 
@@ -72,7 +85,20 @@ function Icono({ d, className }: { d: string; className?: string }) {
 
 const ALERTA = 'M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z';
 const TELEFONO = 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.7 2Z';
-const LUGAR = 'M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z';
+
+/** Un renglón del recibo: concepto a la izquierda, dato a la derecha. */
+function Renglon({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <span className="text-on-surface-variant">{etiqueta}</span>
+      <span className="text-right font-bold tabular-nums">{children}</span>
+    </div>
+  );
+}
+
+function Corte() {
+  return <div className="ticket-corte my-4" />;
+}
 
 interface Props {
   tenant: string;
@@ -135,128 +161,139 @@ export default function ReciboVivo({ tenant, token, inicial }: Props) {
   const anulado = recibo.estado === 'anulado';
 
   return (
-    <div className="space-y-5">
-      {/* ── Quién cobra ─────────────────────────────────────────────── */}
-      <header className="text-center">
-        <h1 className="text-zp-2xl font-extrabold leading-tight">{recibo.parqueadero}</h1>
-        {recibo.sede !== recibo.parqueadero && (
-          <p className="mt-1 text-zp-body font-semibold">{recibo.sede}</p>
-        )}
-        <div className="mt-3 space-y-1.5 text-zp-body text-on-surface-variant">
+    <div className="ticket recibo-mono text-zp-body">
+      <div className="ticket-hoja px-5 pt-6">
+        {/* ── Quién cobra ───────────────────────────────────────────── */}
+        <header className="text-center">
+          <h1 className="text-zp-lg font-extrabold uppercase tracking-wide">
+            {recibo.parqueadero}
+          </h1>
+          {recibo.sede !== recibo.parqueadero && (
+            <p className="mt-0.5 font-semibold">{recibo.sede}</p>
+          )}
           {recibo.direccion && (
-            <p className="flex items-center justify-center gap-2">
-              <Icono d={LUGAR} className="h-5 w-5 shrink-0" />
-              <span>{recibo.direccion}</span>
-            </p>
+            <p className="mt-2 text-zp-caption text-on-surface-variant">{recibo.direccion}</p>
           )}
           {recibo.telefono && (
             <a href={`tel:${recibo.telefono.replace(/[^\d+]/g, '')}`}
-               className="flex items-center justify-center gap-2 font-semibold
-                          text-on-surface underline underline-offset-4">
-              <Icono d={TELEFONO} className="h-5 w-5 shrink-0" />
-              <span>{recibo.telefono}</span>
+               className="mt-1 inline-flex items-center gap-2 text-zp-caption font-bold
+                          underline underline-offset-4">
+              <Icono d={TELEFONO} className="h-4 w-4 shrink-0" />
+              {recibo.telefono}
             </a>
           )}
-        </div>
-      </header>
+        </header>
 
-      {/* ── Qué se dejó ─────────────────────────────────────────────── */}
-      <section className="rounded-zp border-2 border-outline bg-surface-container-lowest p-5
-                          text-center">
-        {recibo.placa ? (
-          <span className="placa text-zp-xl">{recibo.placa}</span>
-        ) : (
-          <span className="inline-flex items-center rounded-zp border-2 border-dashed
-                           border-outline-variant px-3 py-1 font-semibold
-                           text-on-surface-variant">
-            {recibo.vehiculo}
-          </span>
-        )}
-        <p className="mt-3 text-zp-caption font-bold uppercase tracking-wide
-                      text-on-surface-variant">
-          {recibo.vehiculo} · Ticket {recibo.codigo}
-        </p>
-      </section>
+        <Corte />
 
-      {/* ── Cuánto va ───────────────────────────────────────────────── */}
-      {anulado ? (
-        <section className="rounded-zp border-2 border-outline bg-surface-container-lowest
-                            p-6 text-center">
-          <p className="text-zp-lg font-extrabold">Ticket anulado</p>
-          <p className="mt-2 text-zp-body text-on-surface-variant">
-            Este ticket ya no está en curso. Consulta en la caseta.
-          </p>
-        </section>
-      ) : (
-        <section className="rounded-zp border-2 border-outline bg-surface-container-lowest p-6">
-          <dl className="flex items-baseline justify-between gap-4">
-            <dt className="text-zp-caption font-bold uppercase tracking-wide
-                           text-on-surface-variant">Entrada</dt>
-            <dd className="text-zp-body font-semibold">{reloj(recibo.entrada_at)}</dd>
-          </dl>
-          <dl className="mt-2 flex items-baseline justify-between gap-4">
-            <dt className="text-zp-caption font-bold uppercase tracking-wide
-                           text-on-surface-variant">
-              {cerrado ? 'Salida' : 'Lleva'}
-            </dt>
-            <dd className="text-zp-body font-semibold tabular-nums">
-              {cerrado && recibo.salida_at ? reloj(recibo.salida_at) : duracion(minutos)}
-            </dd>
-          </dl>
-
-          <div className="my-5 border-t-2 border-outline-variant" />
-
-          <p className="text-zp-caption font-bold uppercase tracking-wide
-                        text-on-surface-variant">
-            {recibo.estimado ? 'Va en' : 'Total cobrado'}
-          </p>
-          <p className="mt-1 text-zp-4xl font-extrabold leading-none tabular-nums">
-            {recibo.en_cortesia ? 'Sin cobro' : pesos(recibo.total)}
-          </p>
-          {recibo.tarifa && (
-            <p className="mt-2 text-zp-body">
-              {recibo.acordada && (
-                <span className="text-on-surface-variant">Tarifa acordada: </span>
-              )}
-              <span className="font-semibold">{recibo.tarifa}</span>
-            </p>
+        {/* ── Qué se dejó ───────────────────────────────────────────── */}
+        <div className="text-center">
+          {recibo.placa ? (
+            <span className="placa text-zp-xl">{recibo.placa}</span>
+          ) : (
+            <span className="inline-flex items-center rounded-zp border-2 border-dashed
+                             border-outline-variant px-3 py-1 font-bold
+                             text-on-surface-variant">
+              {recibo.vehiculo}
+            </span>
           )}
+        </div>
 
-          {recibo.lineas.length > 1 && (
-            <ul className="mt-4 space-y-1.5 border-t-2 border-outline-variant pt-4">
+        <div className="mt-4 space-y-1.5">
+          <Renglon etiqueta="Ticket">{recibo.codigo}</Renglon>
+          <Renglon etiqueta="Tipo">{recibo.vehiculo}</Renglon>
+          <Renglon etiqueta="Fecha">{fecha(recibo.entrada_at)}</Renglon>
+          <Renglon etiqueta="Entrada">{hora(recibo.entrada_at)}</Renglon>
+          {cerrado && recibo.salida_at && (
+            <Renglon etiqueta="Salida">{hora(recibo.salida_at)}</Renglon>
+          )}
+          <Renglon etiqueta={cerrado ? 'Tiempo total' : 'Lleva'}>
+            {duracion(minutos)}
+          </Renglon>
+        </div>
+
+        {/* ── Cuánto va ─────────────────────────────────────────────── */}
+        {anulado ? (
+          <>
+            <Corte />
+            <p className="py-4 text-center text-zp-lg font-extrabold uppercase">
+              Ticket anulado
+            </p>
+            <p className="pb-2 text-center text-zp-caption text-on-surface-variant">
+              Este ticket ya no está en curso. Consulta en la caseta.
+            </p>
+          </>
+        ) : (
+          <>
+            <Corte />
+
+            <p className="text-zp-caption font-bold uppercase tracking-widest
+                          text-on-surface-variant">
+              Detalle del cobro{recibo.tarifa && ` · ${recibo.tarifa}`}
+            </p>
+
+            <ul className="mt-3 space-y-2">
               {recibo.lineas.map((l, i) => (
-                <li key={i} className="flex items-baseline justify-between gap-4
-                                       text-zp-body">
-                  <span className="text-on-surface-variant">
-                    {l.concepto}
-                    {l.detalle && <span className="text-zp-caption"> · {l.detalle}</span>}
+                <li key={i} className="flex items-baseline justify-between gap-4">
+                  <span className="min-w-0">
+                    <span className="block font-bold">{l.concepto}</span>
+                    {l.detalle && (
+                      <span className="block text-zp-caption text-on-surface-variant">
+                        {l.detalle}
+                      </span>
+                    )}
                   </span>
-                  <span className="shrink-0 font-semibold tabular-nums">{pesos(l.monto)}</span>
+                  <span className="shrink-0 font-bold tabular-nums">{pesos(l.monto)}</span>
                 </li>
               ))}
             </ul>
-          )}
 
-          {recibo.estimado && (
-            <p className="mt-4 text-zp-caption text-on-surface-variant">
-              {recibo.acordada
-                ? 'Calculado con la tarifa que acordaste al dejar tu vehículo. Sube con el tiempo y se actualiza solo.'
-                : 'Valor estimado, se actualiza solo. El monto definitivo lo confirma el operario al momento de salir.'}
-              {sinConexion && ' Sin conexión: puede estar desactualizado.'}
-            </p>
-          )}
-        </section>
-      )}
+            <div className="mt-4 flex items-baseline justify-between gap-4 rounded-zp
+                            border-2 border-outline px-4 py-3">
+              <span className="text-zp-caption font-bold uppercase tracking-widest">
+                {recibo.estimado ? 'Va en' : 'Total cobrado'}
+              </span>
+              <span className="text-zp-xl font-extrabold tabular-nums">
+                {recibo.en_cortesia ? 'Sin cobro' : pesos(recibo.total)}
+              </span>
+            </div>
 
-      {/* ── El aviso ────────────────────────────────────────────────── */}
-      <section className="flex items-start gap-3 rounded-zp border-2 border-warning
-                          bg-surface-container-lowest p-5">
-        <Icono d={ALERTA} className="mt-0.5 h-6 w-6 shrink-0" />
-        <div>
-          <p className="text-zp-body font-extrabold">Objetos dentro del vehículo</p>
-          <p className="mt-1 text-zp-body text-on-surface-variant">{recibo.aviso}</p>
+            {recibo.estimado && (
+              <p className="mt-3 text-zp-caption text-on-surface-variant">
+                {recibo.acordada
+                  ? 'Calculado con la tarifa que acordaste al dejar tu vehículo. Sube con el tiempo y se actualiza solo.'
+                  : 'Valor estimado, se actualiza solo. El monto definitivo lo confirma el operario al momento de salir.'}
+                {sinConexion && ' Sin conexión: puede estar desactualizado.'}
+              </p>
+            )}
+          </>
+        )}
+
+        <Corte />
+
+        {/* ── El aviso ──────────────────────────────────────────────── */}
+        <div className="flex items-start gap-3 rounded-zp border-2 border-warning p-4">
+          <Icono d={ALERTA} className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-extrabold">Objetos dentro del vehículo</p>
+            <p className="mt-1 text-zp-caption text-on-surface-variant">{recibo.aviso}</p>
+          </div>
         </div>
-      </section>
+
+        <Corte />
+
+        {/* ── El reglamento ─────────────────────────────────────────── */}
+        <section className="pb-6">
+          <h2 className="text-center text-zp-caption font-bold uppercase tracking-widest
+                         text-on-surface-variant">
+            Términos y condiciones
+          </h2>
+          <p className="mt-3 text-justify text-zp-caption leading-relaxed
+                        text-on-surface-variant">
+            {recibo.terminos}
+          </p>
+        </section>
+      </div>
     </div>
   );
 }
