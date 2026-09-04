@@ -17,7 +17,6 @@ from app.models.parking_lot import ParkingLot
 from app.models.tenant import Tenant
 from app.models.ticket import MetodoPago
 from app.services.recibo import (
-    AVISO_POR_DEFECTO,
     TERMINOS_POR_DEFECTO,
     ReciboNoEncontrado,
     recibo_publico,
@@ -99,25 +98,6 @@ async def test_muestra_lo_que_el_cliente_necesita(dos_tenants):
     assert r.estimado is True, "abierto todavía: el monto no es definitivo"
 
 
-async def test_el_aviso_de_objetos_perdidos_siempre_viene(dos_tenants):
-    """Sin configurar sale el de fábrica; configurado, el del parqueadero."""
-    a, _ = dos_tenants
-    async with tenant_scope(a.id) as session:
-        ticket = await _abrir(session, a)
-        tenant = await session.get(Tenant, a.id)
-
-        r = await recibo_publico(
-            session, tenant=tenant, token=ticket.token_publico, ahora=ENTRADA
-        )
-        assert r.aviso == AVISO_POR_DEFECTO
-
-        tenant.aviso_responsabilidad = "Deje sus llaves en recepción."
-        r2 = await recibo_publico(
-            session, tenant=tenant, token=ticket.token_publico, ahora=ENTRADA
-        )
-        assert r2.aviso == "Deje sus llaves en recepción."
-
-
 async def test_cerrado_muestra_lo_cobrado_y_no_un_calculo_nuevo(dos_tenants):
     """Recalcular después del cierre daría otro número: el reloj siguió."""
     a, _ = dos_tenants
@@ -176,7 +156,7 @@ async def test_se_abre_sin_iniciar_sesion(dos_tenants, client):
     assert r.status_code == 200
     cuerpo = r.json()
     assert cuerpo["codigo"] == ticket.codigo
-    assert cuerpo["aviso"]
+    assert cuerpo["terminos"]
     assert "operario_entrada_id" not in cuerpo
 
 

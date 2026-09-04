@@ -2,8 +2,8 @@
  * Lo que el cliente ve en su recibo, editable por el administrador.
  *
  * La dirección y el teléfono son de la sede —una empresa con dos casetas
- * tiene dos direcciones— y el aviso de responsabilidad es del parqueadero
- * entero, porque es una política, no una ubicación.
+ * tiene dos direcciones— y el reglamento es del parqueadero entero,
+ * porque es una política, no una ubicación.
  */
 import { useState } from 'react';
 
@@ -24,8 +24,6 @@ interface Sede {
 
 interface Config {
   nombre: string;
-  aviso_responsabilidad: string | null;
-  aviso_efectivo: string;
   terminos_condiciones: string | null;
   terminos_efectivos: string;
 }
@@ -44,7 +42,6 @@ export default function DatosParqueadero({
 }: Props) {
   const [sedes, setSedes] = useState(sedesIniciales);
   const [config, setConfig] = useState(configInicial);
-  const [aviso, setAviso] = useState(configInicial.aviso_responsabilidad ?? '');
   const [terminos, setTerminos] = useState(configInicial.terminos_condiciones ?? '');
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +95,6 @@ export default function DatosParqueadero({
     });
     if (datos) {
       setConfig(datos);
-      setAviso(datos.aviso_responsabilidad ?? '');
       setTerminos(datos.terminos_condiciones ?? '');
       setOk(hecho);
     }
@@ -175,55 +171,6 @@ export default function DatosParqueadero({
             </li>
           ))}
         </ul>
-      </section>
-
-      {/* ── El aviso ────────────────────────────────────────────────── */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-zp-lg font-extrabold">Aviso de responsabilidad</h2>
-          <p className="mt-1 text-zp-body text-on-surface-variant">
-            Se muestra destacado en el recibo del cliente. Déjalo en blanco para usar
-            el texto que trae ZonePark.
-          </p>
-        </div>
-
-        <label className="block space-y-1.5">
-          <span className={ETIQUETA}>Tu texto</span>
-          <textarea
-            value={aviso}
-            disabled={!puedeEditarConfig}
-            rows={4}
-            maxLength={400}
-            placeholder={config.aviso_efectivo}
-            onChange={(e) => setAviso(e.target.value)}
-            className={`${CAMPO} resize-y`}
-          />
-        </label>
-        <p className="text-zp-caption text-on-surface-variant">
-          {aviso.length}/400
-          {!aviso.trim() && ' · en blanco se muestra el texto de ejemplo de arriba'}
-        </p>
-
-        {puedeEditarConfig && (
-          <button
-            onClick={() =>
-              guardarTextos(
-                { aviso_responsabilidad: aviso.trim() || null }, 'Aviso actualizado',
-              )
-            }
-            disabled={ocupado}
-                  className="rounded-zp border-2 border-outline bg-primary px-5 py-3
-                             text-zp-body font-extrabold uppercase tracking-wide
-                             text-on-primary disabled:bg-surface-container-high
-                             disabled:text-on-surface-variant">
-            Guardar aviso
-          </button>
-        )}
-
-        <div className="rounded-zp border-2 border-warning bg-surface-container-lowest p-4">
-          <p className={ETIQUETA}>Así lo verá el cliente</p>
-          <p className="mt-2 text-zp-body">{aviso.trim() || config.aviso_efectivo}</p>
-        </div>
       </section>
 
       {/* ── El reglamento ───────────────────────────────────────────── */}

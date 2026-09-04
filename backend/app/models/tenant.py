@@ -40,6 +40,9 @@ class Tenant(UUIDPk, Timestamps, Base):
     # Vacío = la aplicación pone su texto por defecto. Se guarda solo
     # cuando el parqueadero escribe el suyo, para poder mejorar el de
     # fábrica sin pisarle el que ya redactó.
+    # Ya no se muestra: el reglamento del pie del recibo lo absorbió. La
+    # columna se queda porque nadie llegó a escribir la suya y tirarla
+    # exigiría una migración destructiva a cambio de nada.
     aviso_responsabilidad: Mapped[str | None] = mapped_column(String(400))
 
     # El reglamento completo, el que va al pie del recibo en letra

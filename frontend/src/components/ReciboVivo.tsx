@@ -29,7 +29,6 @@ export interface Recibo {
   sede: string;
   direccion: string | null;
   telefono: string | null;
-  aviso: string;
   terminos: string;
   codigo: string;
   placa: string | null;
@@ -83,7 +82,6 @@ function Icono({ d, className }: { d: string; className?: string }) {
   );
 }
 
-const ALERTA = 'M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z';
 const TELEFONO = 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .3 1.9.6 2.8a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.2-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.8.6a2 2 0 0 1 1.7 2Z';
 
 /** Un renglón del recibo: concepto a la izquierda, dato a la derecha. */
@@ -268,17 +266,6 @@ export default function ReciboVivo({ tenant, token, inicial }: Props) {
             )}
           </>
         )}
-
-        <Corte />
-
-        {/* ── El aviso ──────────────────────────────────────────────── */}
-        <div className="flex items-start gap-3 rounded-zp border-2 border-warning p-4">
-          <Icono d={ALERTA} className="mt-0.5 h-5 w-5 shrink-0" />
-          <div>
-            <p className="font-extrabold">Objetos dentro del vehículo</p>
-            <p className="mt-1 text-zp-caption text-on-surface-variant">{recibo.aviso}</p>
-          </div>
-        </div>
 
         <Corte />
 

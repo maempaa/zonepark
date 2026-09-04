@@ -109,34 +109,30 @@ button, a[role="button"], input, select {
    Papel de impresora térmica: el borde inferior va rasgado, como el que
    se arranca del rollo.
 
-   Son dos capas con la misma máscara. La de afuera lleva el color del
-   borde y la de adentro el del papel, 2px más pequeña: así el trazo del
-   diseño sigue el contorno de los dientes en vez de cortarse en seco al
-   llegar al rasgado.
+   Sin borde y con sombra, no al revés. Un trazo negro alrededor
+   convertiría el rasgado en una línea quebrada, que es justo lo contrario
+   de un papel roto; lo que lo despega del fondo es la elevación.
+
+   La sombra va con `filter` y no con `box-shadow`: box-shadow sigue la
+   caja rectangular del elemento y dibujaría una recta por debajo de los
+   dientes. `drop-shadow` sigue la silueta que deja la máscara.
 
    El diente mide el doble de ancho que de alto porque el cono abarca 90°,
    45° a cada lado: con otra proporción quedarían huecos entre uno y otro. */
 .ticket {
   --alto-diente: 10px;
   --ancho-diente: calc(var(--alto-diente) * 2);
-  background: var(--color-outline);
-  padding: 2px;
-  padding-bottom: 0;
-  border-radius: var(--radius-zp) var(--radius-zp) 0 0;
-  -webkit-mask: var(--rasgado);
-  mask: var(--rasgado);
+  filter:
+    drop-shadow(0 1px 2px rgb(0 0 0 / 0.14))
+    drop-shadow(0 8px 18px rgb(0 0 0 / 0.16));
 }
 
 .ticket-hoja {
   background: var(--color-surface-container-lowest);
-  border-radius: calc(var(--radius-zp) - 2px) calc(var(--radius-zp) - 2px) 0 0;
+  border-radius: var(--radius-zp) var(--radius-zp) 0 0;
   padding-bottom: var(--alto-diente);
   -webkit-mask: var(--rasgado);
   mask: var(--rasgado);
-}
-
-.ticket,
-.ticket-hoja {
   --rasgado:
     linear-gradient(#000 0 0) top / 100% calc(100% - var(--alto-diente)) no-repeat,
     conic-gradient(from -45deg at bottom, #000 90deg, #0000 0)

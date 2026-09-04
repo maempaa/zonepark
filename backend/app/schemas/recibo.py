@@ -26,7 +26,6 @@ class ReciboPublicoOut(BaseModel):
     sede: str
     direccion: str | None
     telefono: str | None
-    aviso: str
     terminos: str
 
     codigo: str

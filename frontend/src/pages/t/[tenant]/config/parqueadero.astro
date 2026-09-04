@@ -20,14 +20,10 @@ const [sedesRes, configRes] = await Promise.all([
 ]);
 const sedes = sedesRes?.ok ? await sedesRes.json() : [];
 // Sin `tenant:read` la pantalla sigue sirviendo para dirección y teléfono;
-// solo se queda sin la parte del aviso.
+// solo se queda sin la parte del reglamento.
 const config = configRes?.ok
   ? await configRes.json()
-  : {
-      nombre: tenant,
-      aviso_responsabilidad: null, aviso_efectivo: '',
-      terminos_condiciones: null, terminos_efectivos: '',
-    };
+  : { nombre: tenant, terminos_condiciones: null, terminos_efectivos: '' };
 ---
 <Base titulo="Datos del parqueadero" anchura="tablet">
   <CabeceraPantalla

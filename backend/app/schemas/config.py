@@ -8,8 +8,6 @@ class ConfigOut(BaseModel):
 
     nombre: str
     # Vacío significa "usa el de fábrica"; la pantalla muestra cuál es.
-    aviso_responsabilidad: str | None
-    aviso_efectivo: str
     terminos_condiciones: str | None
     terminos_efectivos: str
     timezone: str
@@ -18,5 +16,4 @@ class ConfigOut(BaseModel):
 
 class ConfigUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=160)
-    aviso_responsabilidad: str | None = Field(default=None, max_length=400)
     terminos_condiciones: str | None = Field(default=None, max_length=2000)

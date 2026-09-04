@@ -44,11 +44,6 @@ TERMINOS_POR_DEFECTO = (
     "dejados encima de las motocicletas."
 )
 
-AVISO_POR_DEFECTO = (
-    "No nos hacemos responsables por objetos dejados dentro del vehículo, "
-    "ni por accesorios exteriores. Retire sus pertenencias de valor."
-)
-
 
 class ReciboNoEncontrado(Exception):
     """Token que no corresponde a ningún ticket de este parqueadero."""
@@ -68,7 +63,6 @@ class ReciboPublico:
     sede: str
     direccion: str | None
     telefono: str | None
-    aviso: str
     terminos: str
 
     # Qué se dejó
@@ -109,7 +103,6 @@ async def recibo_publico(
         "sede": sede.nombre if sede else tenant.nombre,
         "direccion": sede.direccion if sede else None,
         "telefono": sede.telefono if sede else None,
-        "aviso": tenant.aviso_responsabilidad or AVISO_POR_DEFECTO,
         "terminos": tenant.terminos_condiciones or TERMINOS_POR_DEFECTO,
         "codigo": ticket.codigo,
         "placa": ticket.placa,
